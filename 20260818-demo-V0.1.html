@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>帆船物理模拟 · 教学示意版</title>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; user-select:none; touch-action:none; }
+        body { background:#0a2a3a; display:flex; justify-content:center; align-items:center; height:100vh; overflow:hidden; font-family:'Segoe UI',sans-serif; }
+        #gameWrapper { width:100vw; height:100vh; max-width:450px; max-height:800px; background:#0d3b4c; position:relative; border-radius:12px; box-shadow:0 0 40px rgba(0,0,0,0.7); overflow:hidden; }
+        canvas { display:block; width:100%; height:100%; background:#0d3b4c; cursor:pointer; touch-action:none; }
+        #overlayTips { position:absolute; bottom:15px; left:0; width:100%; display:flex; justify-content:space-between; padding:0 20px; pointer-events:none; color:rgba(255,255,255,0.3); font-size:12px; letter-spacing:2px; font-weight:bold; text-shadow:0 1px 4px rgba(0,0,0,0.5); }
+        #overlayTips span:first-child { color:#6bcfff; opacity:0.6; }
+        #overlayTips span:last-child { color:#ffb347; opacity:0.6; }
+        #centerboardArea { position:absolute; bottom:50px; left:50%; transform:translateX(-50%); width:60%; height:30px; background:rgba(0,0,0,0.3); border-radius:20px; backdrop-filter:blur(4px); border:1px solid rgba(255,255,255,0.15); display:flex; align-items:center; padding:0 10px; gap:8px; pointer-events:auto; touch-action:none; }
+        #centerboardArea label { color:rgba(255,255,255,0.5); font-size:10px; font-weight:bold; letter-spacing:1px; width:36px; }
+        #centerboardTrack { flex:1; height:4px; background:rgba(255,255,255,0.2); border-radius:4px; position:relative; touch-action:none; pointer-events:auto; }
+        #centerboardKnob { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:18px; height:18px; background:#ffd966; border-radius:50%; box-shadow:0 0 12px rgba(255,215,0,0.3); pointer-events:none; transition:left 0.05s; }
+        #cbLabel { color:#ffd966; font-size:9px; font-weight:bold; width:28px; text-align:right; }
+    </style>
+</head>
+<body>
+<div id="gameWrapper">
+    <canvas id="gameCanvas"></canvas>
+    <div id="overlayTips">
+        <span>⬅ 左 · 调帆 (上下滑)</span>
+        <span>右 · 调舵 (左右滑) ➡</span>
+    </div>
+    <div id="centerboardArea">
+        <label>龙骨</label>
+        <div id="centerboardTrack">
+            <div id="centerboardKnob" style="left:50%;"></div>
+        </div>
+        <span id="cbLabel">中</span>
+    </div>
+</div>
+
+<script>
+(function(){
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    function resizeCanvas() {
+        const wrapper = document.getElementById('gameWrapper');
+        const rect = wrapper.getBoundingClientRect();
+        canvas.width = rect.width * window.devicePixelRatio || rect.width;
+        canvas.height = rect.height * window.devicePixelRatio || rect.height;
+        canvas.style.width = rect.width + 'px';
+        canvas.style.height = rect.height + 'px';
+        canvas.logW = 400;
+        canvas.logH = 700;
+    }
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    const W = 400, H = 700;
+    const WIND_ANGLE = 0;
+    const MAX_SAIL_ANGLE = 1.2;
+    const WIND_SPEED = 1.0;
+
+    let boat = {
+        x: 200, y: 350,
+        heading: 0.8,
+        speed: 0,
+        sailOffset: 0.5,
+        rudder: 0,
+        centerboard: 0.5,
+        driftX: 0,
+        driftY: 0
+    };
+
+    const buoys = [
+        { x: 140, y: 200, color: 'red', label: '1' },
+        { x: 260, y: 280, color: 'green', label: '2' },
+        { x: 150, y: 420, color: 'red', label: '3' },
+        { x: 250, y: 520, color: 'green', label: '4' },
+        { x: 180, y: 620, color: 'red', label: '5' },
+    ];
+
+    // ---------- 风粒子 ----------
+    const NUM_PARTICLES = 40;
+    let particles = [];
+    for (let i = 0; i < NUM_PARTICLES; i++) {
+        particles.push({
+            x: Math.random() * W,
+            y: Math.random() * H,
+            len: 8 + Math.random() * 18,
+            speed: 0.8 + Math.random() * 1.5
+        });
+    }
+
+    // ---------- 物理函数 ----------
+    function calcSpeed(heading) {
+        let diff = heading - WIND_ANGLE;
+        diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+        const absDiff = Math.abs(diff);
+        if (absDiff < 0.52) return 0;
+        if (absDiff < 1.57) {
+            const x = (absDiff - 0.52) / 1.05;
+            return 1 - Math.exp(-12 * x);
+        }
+        return 1.0 - (absDiff - 1.57) / 1.57 * 0.5;
+    }
+
+    // ---------- 关键修正：横风最优帆角改为 50% ----------
+    function calcSailEfficiency(heading, sailOffset) {
+        let diff = heading - WIND_ANGLE;
+        diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+        const absDiff = Math.abs(diff);
+        let optimalOffset;
+        if (absDiff < 1.57) {
+            // 从 0° 到 90°，最优帆角从 0 线性增至 0.5 (50%)
+            const t = (absDiff - 0.52) / 1.05;
+            optimalOffset = 0.0 + t * 0.5;
+        } else {
+            // 顺风段：从 50% 增至 100%
+            const t = (absDiff - 1.57) / 1.57;
+            optimalOffset = 0.5 + t * 0.5;
+        }
+        const deviation = sailOffset - optimalOffset;
+        const penalty = 2.5;
+        let efficiency = 1 - penalty * deviation * deviation;
+        return Math.max(0.3, Math.min(1.0, efficiency));
+    }
+
+    function calcLateralForceCoeff(heading) {
+        let diff = heading - WIND_ANGLE;
+        diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+        const absDiff = Math.abs(diff);
+        if (absDiff < 0.52) return 0;
+        if (absDiff < 1.57) {
+            const x = (absDiff - 0.52) / 1.05;
+            return Math.sin(x * Math.PI);
+        } else {
+            const x = (absDiff - 1.57) / 1.57;
+            return Math.sin((1 - x) * Math.PI / 2);
+        }
+    }
+
+    function update() {
+        // 转向
+        const speedForTurn = Math.min(boat.speed / 0.3, 1.0);
+        const turnBase = 0.045;
+        const turnFactor = 0.4 + 0.6 * (1 - boat.centerboard);
+        boat.heading += boat.rudder * turnBase * turnFactor * speedForTurn;
+
+        // 速度
+        const targetSpeed = calcSpeed(boat.heading) * WIND_SPEED;
+        const sailEff = calcSailEfficiency(boat.heading, boat.sailOffset);
+        const finalSpeed = targetSpeed * sailEff;
+        boat.speed += (finalSpeed - boat.speed) * 0.15;
+
+        // ---- 横向漂移（系数提升至 0.18，增强下风漂移） ----
+        const diff = boat.heading - WIND_ANGLE;
+        const normDiff = Math.atan2(Math.sin(diff), Math.cos(diff));
+        const side = Math.sign(normDiff);
+        const lateralCoeff = calcLateralForceCoeff(boat.heading);
+        const cbFactor = 0.2 + 0.8 * (1 - boat.centerboard);
+        const driftSpeed = boat.speed * lateralCoeff * 0.18 * cbFactor; // 0.18
+        const rudderDrift = -boat.speed * 0.12 * Math.sin(boat.rudder * 1.2) * (0.5 + 0.5 * (1 - boat.centerboard));
+        const totalLateral = driftSpeed + rudderDrift;
+
+        const dirX = side * Math.cos(boat.heading);
+        const dirY = side * Math.sin(boat.heading);
+        boat.driftX += dirX * totalLateral;
+        boat.driftY += dirY * totalLateral;
+        boat.driftX *= 0.97;
+        boat.driftY *= 0.97;
+
+        // 位置更新
+        boat.x += Math.sin(boat.heading) * boat.speed * 1.8;
+        boat.y -= Math.cos(boat.heading) * boat.speed * 1.8;
+        boat.x += boat.driftX;
+        boat.y += boat.driftY;
+
+        if (boat.x < -50) boat.x = 450;
+        if (boat.x > 450) boat.x = -50;
+        if (boat.y < -50) boat.y = 750;
+        if (boat.y > 750) boat.y = -50;
+
+        // 风粒子
+        const windEffect = WIND_SPEED * (0.8 + boat.speed * 0.2);
+        for (let p of particles) {
+            p.y += p.speed * 0.8 * windEffect;
+            p.x += Math.sin(p.y * 0.05 + p.x * 0.02) * 0.15;
+            if (p.y > H + 20) {
+                p.y = -20;
+                p.x = Math.random() * W;
+            }
+        }
+    }
+
+    // ---------- 绘图（与之前版本一致，仅调整桅杆和帆尺寸） ----------
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const scaleX = canvas.width / W;
+        const scaleY = canvas.height / H;
+        ctx.save();
+        ctx.scale(scaleX, scaleY);
+
+        // 海面网格
+        ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+        ctx.lineWidth = 0.5;
+        for (let i = 0; i < 20; i++) {
+            const pos = (i * 30 - boat.y % 30) % 700;
+            ctx.beginPath();
+            ctx.moveTo(0, pos);
+            ctx.lineTo(400, pos);
+            ctx.stroke();
+        }
+        for (let i = 0; i < 15; i++) {
+            const pos = (i * 30 - boat.x % 30) % 400;
+            ctx.beginPath();
+            ctx.moveTo(pos, 0);
+            ctx.lineTo(pos, 700);
+            ctx.stroke();
+        }
+
+        // 风粒子
+        const windEffect = WIND_SPEED * (0.8 + boat.speed * 0.2);
+        ctx.save();
+        for (let p of particles) {
+            const len = p.len * (0.6 + 0.4 * windEffect);
+            ctx.strokeStyle = `rgba(200, 230, 255, ${0.08 + 0.07 * windEffect})`;
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(p.x - 2, p.y + len);
+            ctx.stroke();
+        }
+        ctx.restore();
+
+        // 风向指示
+        ctx.save();
+        ctx.translate(50, 50);
+        ctx.shadowColor = 'rgba(255,255,255,0.2)';
+        ctx.shadowBlur = 12;
+        ctx.fillStyle = 'rgba(200,230,255,0.8)';
+        ctx.font = 'bold 28px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('⬆', 0, 0);
+        ctx.font = '12px sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.fillText('北风', 0, 30);
+        ctx.restore();
+
+        // 浮标
+        buoys.forEach(b => {
+            const dx = b.x - boat.x + 200;
+            const dy = b.y - boat.y + 350;
+            if (dx < -20 || dx > 420 || dy < -20 || dy > 720) return;
+            ctx.save();
+            ctx.translate(dx, dy);
+            const grad = ctx.createRadialGradient(0,0,2,0,0,20);
+            grad.addColorStop(0, b.color === 'red' ? 'rgba(255,60,60,0.9)' : 'rgba(60,255,60,0.9)');
+            grad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(0, 0, 20, 0, Math.PI*2);
+            ctx.fill();
+            ctx.shadowColor = 'rgba(0,0,0,0.5)';
+            ctx.shadowBlur = 8;
+            ctx.fillStyle = b.color;
+            ctx.beginPath();
+            ctx.arc(0, 0, 10, 0, Math.PI*2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 12px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(b.label, 0, 1);
+            ctx.restore();
+        });
+
+        // ---- 帆船 ----
+        ctx.save();
+        ctx.translate(200, 350);
+        ctx.rotate(boat.heading);
+
+        // 船体
+        ctx.shadowColor = 'rgba(0,0,0,0.3)';
+        ctx.shadowBlur = 15;
+        ctx.shadowOffsetY = 4;
+        ctx.beginPath();
+        ctx.moveTo(0, -48);
+        ctx.quadraticCurveTo(22, -20, 18, 14);
+        ctx.lineTo(12, 34);
+        ctx.lineTo(-12, 34);
+        ctx.lineTo(-18, 14);
+        ctx.quadraticCurveTo(-22, -20, 0, -48);
+        ctx.closePath();
+        ctx.fillStyle = '#6b4c2a';
+        ctx.fill();
+        ctx.strokeStyle = '#3d2916';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = '#8b6b4a';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, -24);
+        ctx.lineTo(0, 24);
+        ctx.stroke();
+
+        // 桅杆
+        const mastPt = { x: 0, y: -20 };
+        ctx.strokeStyle = '#4a3520';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(mastPt.x, mastPt.y - 32);
+        ctx.lineTo(mastPt.x, mastPt.y + 4);
+        ctx.stroke();
+
+        // 帆
+        const diffWind = boat.heading - WIND_ANGLE;
+        const normDiff = Math.atan2(Math.sin(diffWind), Math.cos(diffWind));
+        let sailSide = Math.sign(normDiff);
+        if (sailSide === 0) sailSide = 1;
+        const sailAngle = sailSide * boat.sailOffset * MAX_SAIL_ANGLE;
+
+        const sailLength = 38;
+        const clew = {
+            x: mastPt.x + sailLength * Math.sin(sailAngle),
+            y: mastPt.y + sailLength * Math.cos(sailAngle)
+        };
+
+        const power = Math.min(boat.speed, 1.0);
+        const bulge = 8 + power * 16;
+
+        ctx.save();
+        ctx.shadowColor = 'rgba(0,0,0,0.15)';
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.moveTo(mastPt.x, mastPt.y);
+        const midX = (mastPt.x + clew.x) / 2;
+        const midY = (mastPt.y + clew.y) / 2;
+        const dx = clew.x - mastPt.x;
+        const dy = clew.y - mastPt.y;
+        const len = Math.hypot(dx, dy);
+        if (len > 0.001) {
+            let perpX = -dy / len;
+            let perpY = dx / len;
+            if (sailSide * perpX < 0) {
+                perpX = -perpX;
+                perpY = -perpY;
+            }
+            const ctrlX = midX + perpX * bulge;
+            const ctrlY = midY + perpY * bulge;
+            ctx.quadraticCurveTo(ctrlX, ctrlY, clew.x, clew.y);
+        } else {
+            ctx.lineTo(clew.x, clew.y);
+        }
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(255, 248, 235, 0.75)';
+        ctx.fill();
+        ctx.strokeStyle = '#2c3e50';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        // 横杆
+        ctx.beginPath();
+        ctx.moveTo(mastPt.x, mastPt.y);
+        ctx.lineTo(clew.x, clew.y);
+        ctx.strokeStyle = '#5d4e37';
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+
+        // 帆骨虚线
+        ctx.setLineDash([3, 4]);
+        ctx.lineWidth = 1.0;
+        ctx.strokeStyle = '#7a6b5a';
+        ctx.beginPath();
+        ctx.moveTo(mastPt.x, mastPt.y);
+        ctx.lineTo(clew.x, clew.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // 标注
+        ctx.fillStyle = '#f1c40f';
+        ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        ctx.arc(mastPt.x, mastPt.y, 5, 0, Math.PI*2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#ecf0f1';
+        ctx.font = 'bold 10px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText('桅杆', mastPt.x + 8, mastPt.y - 2);
+
+        ctx.fillStyle = '#e74c3c';
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        ctx.arc(clew.x, clew.y, 5, 0, Math.PI*2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#ecf0f1';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText('clew', clew.x + 8, clew.y - 2);
+
+        ctx.restore();
+
+        // 舵叶
+        ctx.save();
+        ctx.translate(0, 28);
+        ctx.rotate(-boat.rudder * 0.6);
+        ctx.fillStyle = '#4a3a2a';
+        ctx.shadowBlur = 6;
+        ctx.fillRect(-4, 0, 8, 16);
+        ctx.restore();
+
+        ctx.restore(); // 船体坐标系结束
+
+        // ---- HUD ----
+        ctx.save();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = 'rgba(0,0,0,0.4)';
+        ctx.roundRect(10, 10, 100, 36, 8);
+        ctx.fill();
+        ctx.fillStyle = '#7fdbff';
+        ctx.font = 'bold 16px monospace';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('⚡ ' + (boat.speed * 6).toFixed(1) + ' kn', 20, 28);
+
+        const diff = Math.atan2(Math.sin(boat.heading - WIND_ANGLE), Math.cos(boat.heading - WIND_ANGLE));
+        const isInIrons = Math.abs(Math.abs(diff) - 0) < 0.52;
+        if (isInIrons && boat.speed < 0.1) {
+            ctx.fillStyle = 'rgba(255,0,0,0.7)';
+            ctx.roundRect(250, 10, 130, 36, 8);
+            ctx.fill();
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 14px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('⚠️ 顶风停船', 315, 28);
+        } else {
+            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+            ctx.roundRect(250, 10, 130, 36, 8);
+            ctx.fill();
+            ctx.fillStyle = '#aaffaa';
+            ctx.font = '12px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('航向 ' + ((boat.heading * 180 / Math.PI % 360 + 360) % 360).toFixed(0) + '°', 315, 28);
+        }
+
+        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx.roundRect(10, 660, 80, 28, 8);
+        ctx.fill();
+        ctx.fillStyle = '#6bcfff';
+        ctx.font = '11px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('帆 ' + (boat.sailOffset * 100).toFixed(0) + '%', 18, 674);
+
+        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx.roundRect(310, 660, 80, 28, 8);
+        ctx.fill();
+        ctx.fillStyle = '#ffb347';
+        ctx.textAlign = 'right';
+        ctx.fillText('舵 ' + (boat.rudder * 100).toFixed(0) + '%', 382, 674);
+
+        ctx.restore();
+
+        if (touchPos) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(touchPos.x, touchPos.y, 15, 0, Math.PI*2);
+            ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([4, 6]);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        ctx.restore();
+    }
+
+    CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+        if (w < 2*r) r = w/2;
+        if (h < 2*r) r = h/2;
+        this.moveTo(x+r, y);
+        this.lineTo(x+w-r, y);
+        this.quadraticCurveTo(x+w, y, x+w, y+r);
+        this.lineTo(x+w, y+h-r);
+        this.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+        this.lineTo(x+r, y+h);
+        this.quadraticCurveTo(x, y+h, x, y+h-r);
+        this.lineTo(x, y+r);
+        this.quadraticCurveTo(x, y, x+r, y);
+        this.closePath();
+        return this;
+    };
+
+    // ---------- 触控 / 鼠标 ----------
+    let touchPos = null;
+
+    function handlePointer(normX, normY) {
+        const logicX = normX * W;
+        const logicY = normY * H;
+        touchPos = { x: logicX, y: logicY };
+
+        if (normX < 0.5) {
+            boat.sailOffset = Math.max(0, Math.min(1, 1 - normY));
+        } else {
+            let rudderValue = (normX - 0.75) / 0.25;
+            rudderValue = Math.max(-1, Math.min(1, rudderValue));
+            if (Math.abs(rudderValue) < 0.08) rudderValue = 0;
+            boat.rudder = rudderValue;
+        }
+    }
+
+    function onTouch(e) {
+        e.preventDefault();
+        if (e.touches.length === 0) {
+            touchPos = null;
+            boat.rudder = 0;
+            return;
+        }
+        const touch = e.touches[0];
+        const rect = canvas.getBoundingClientRect();
+        const normX = (touch.clientX - rect.left) / rect.width;
+        const normY = (touch.clientY - rect.top) / rect.height;
+        handlePointer(normX, normY);
+    }
+
+    canvas.addEventListener('touchstart', onTouch, { passive: false });
+    canvas.addEventListener('touchmove', onTouch, { passive: false });
+    canvas.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        touchPos = null;
+        boat.rudder = 0;
+    }, { passive: false });
+
+    let mouseDown = false;
+    canvas.addEventListener('mousedown', (e) => {
+        mouseDown = true;
+        const rect = canvas.getBoundingClientRect();
+        const normX = (e.clientX - rect.left) / rect.width;
+        const normY = (e.clientY - rect.top) / rect.height;
+        handlePointer(normX, normY);
+    });
+    canvas.addEventListener('mousemove', (e) => {
+        if (!mouseDown) return;
+        const rect = canvas.getBoundingClientRect();
+        const normX = (e.clientX - rect.left) / rect.width;
+        const normY = (e.clientY - rect.top) / rect.height;
+        handlePointer(normX, normY);
+    });
+    canvas.addEventListener('mouseup', () => {
+        mouseDown = false;
+        boat.rudder = 0;
+        touchPos = null;
+    });
+    canvas.addEventListener('mouseleave', () => {
+        mouseDown = false;
+        boat.rudder = 0;
+        touchPos = null;
+    });
+
+    // ---------- 龙骨滑块 ----------
+    const track = document.getElementById('centerboardTrack');
+    const knob = document.getElementById('centerboardKnob');
+    const cbLabel = document.getElementById('cbLabel');
+
+    function updateCBUI() {
+        const pct = boat.centerboard * 100;
+        knob.style.left = pct + '%';
+        if (pct < 33) cbLabel.textContent = '升';
+        else if (pct < 66) cbLabel.textContent = '中';
+        else cbLabel.textContent = '降';
+    }
+
+    function setCenterboardFromEvent(clientX) {
+        const rect = track.getBoundingClientRect();
+        const pct = (clientX - rect.left) / rect.width;
+        boat.centerboard = Math.max(0, Math.min(1, pct));
+        updateCBUI();
+    }
+
+    track.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        setCenterboardFromEvent(e.touches[0].clientX);
+    }, { passive: false });
+    track.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        setCenterboardFromEvent(e.touches[0].clientX);
+    }, { passive: false });
+    track.addEventListener('mousedown', (e) => {
+        setCenterboardFromEvent(e.clientX);
+    });
+    track.addEventListener('mousemove', (e) => {
+        if (e.buttons === 1) setCenterboardFromEvent(e.clientX);
+    });
+
+    // ---------- 游戏循环 ----------
+    function gameLoop() {
+        update();
+        draw();
+        requestAnimationFrame(gameLoop);
+    }
+
+    updateCBUI();
+    gameLoop();
+
+    window.addEventListener('resize', () => {
+        resizeCanvas();
+    });
+
+})();
+</script>
+</body>
+</html>

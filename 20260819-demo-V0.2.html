@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>帆船物理模拟 · 三操控区</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-touch-callout: none;
+        }
+
+        body {
+            background: #0a2a3a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            font-family: 'Segoe UI', sans-serif;
+            touch-action: pan-y;
+        }
+
+        #gameWrapper {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            max-width: 450px;
+            max-height: 800px;
+            background: #0d3b4c;
+            border-radius: 12px;
+            box-shadow: 0 0 40px rgba(0, 0, 0, 0.7);
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            background: #0d3b4c;
+            touch-action: none;
+            pointer-events: none;
+        }
+
+        /* ---- 圆形控制区（左右） ---- */
+        .circle-control {
+            position: absolute;
+            top: 80%;
+            transform: translateY(-50%);
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            touch-action: none;
+            pointer-events: auto;
+        }
+
+        .circle-control .track {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+            position: relative;
+            touch-action: none;
+        }
+
+        .circle-control .knob {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            box-shadow: 0 0 12px rgba(0, 0, 0, 0.3);
+            pointer-events: none;
+            transition: top 0.05s, left 0.05s;
+        }
+
+        .circle-control .label {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+            font-weight: bold;
+            text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+            white-space: nowrap;
+        }
+
+        /* 左帆 */
+        #sailControl {
+            left: 8%;
+        }
+
+        #sailControl .track {
+            width: 4px;
+            height: 80%;
+        }
+
+        #sailControl .knob {
+            background: #6bcfff;
+            box-shadow: 0 0 12px rgba(107, 207, 255, 0.4);
+        }
+
+        #sailControl .label {
+            color: #6bcfff;
+        }
+
+        /* 右舵 */
+        #rudderControl {
+            right: 8%;
+        }
+
+        #rudderControl .track {
+            height: 4px;
+            width: 80%;
+        }
+
+        #rudderControl .knob {
+            background: #ffb347;
+            box-shadow: 0 0 12px rgba(255, 179, 71, 0.4);
+        }
+
+        #rudderControl .label {
+            color: #ffb347;
+        }
+
+        /* ---- 龙骨控制区（垂直长条） ---- */
+        #centerboardControl {
+            position: absolute;
+            top: 80%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 40px;
+            height: 150px;
+            border-radius: 20px;
+            background: rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            touch-action: none;
+            pointer-events: auto;
+        }
+
+        #centerboardControl .track {
+            width: 4px;
+            height: 80%;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+            position: relative;
+            touch-action: none;
+        }
+
+        #centerboardControl .knob {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 24px;
+            height: 24px;
+            background: #2ecc71;
+            border-radius: 50%;
+            box-shadow: 0 0 12px rgba(46, 204, 113, 0.5);
+            pointer-events: none;
+            transition: top 0.05s;
+        }
+
+        #centerboardControl .label {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+            font-weight: bold;
+            color: #2ecc71;
+            text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+            white-space: nowrap;
+        }
+
+        /* 响应式 */
+        @media (max-width: 400px) {
+            .circle-control {
+                width: 120px;
+                height: 120px;
+            }
+
+            .circle-control .knob {
+                width: 24px;
+                height: 24px;
+            }
+
+            #centerboardControl {
+                width: 34px;
+                height: 120px;
+            }
+
+            #centerboardControl .knob {
+                width: 20px;
+                height: 20px;
+            }
+        }
+
+        @media (max-width: 360px) {
+            .circle-control {
+                width: 100px;
+                height: 100px;
+            }
+
+            .circle-control .knob {
+                width: 20px;
+                height: 20px;
+            }
+
+            #centerboardControl {
+                width: 28px;
+                height: 100px;
+            }
+
+            #centerboardControl .knob {
+                width: 16px;
+                height: 16px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="gameWrapper">
+        <canvas id="gameCanvas"></canvas>
+
+        <!-- 左侧帆控制（圆形） -->
+        <div id="sailControl" class="circle-control">
+            <div class="track" id="sailTrack">
+                <div class="knob" id="sailKnob" style="top:50%;"></div>
+            </div>
+            <div class="label" id="sailLabel">帆 50%</div>
+        </div>
+
+        <!-- 右侧舵控制（圆形） -->
+        <div id="rudderControl" class="circle-control">
+            <div class="track" id="rudderTrack">
+                <div class="knob" id="rudderKnob" style="left:50%;"></div>
+            </div>
+            <div class="label" id="rudderLabel">舵 0%</div>
+        </div>
+
+        <!-- 中部龙骨控制（垂直长条） -->
+        <div id="centerboardControl">
+            <div class="track" id="cbTrack">
+                <div class="knob" id="cbKnob" style="top:50%;"></div>
+            </div>
+            <div class="label" id="cbLabel">龙骨 中</div>
+        </div>
+
+    </div>
+
+    <script>
+        (function () {
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
+
+            // ---------- 尺寸自适应 ----------
+            function resizeCanvas() {
+                const wrapper = document.getElementById('gameWrapper');
+                const rect = wrapper.getBoundingClientRect();
+                const w = rect.width;
+                const h = rect.height;
+                canvas.width = w;
+                canvas.height = h;
+                canvas.style.width = w + 'px';
+                canvas.style.height = h + 'px';
+                canvas.logW = 400;
+                canvas.logH = 700;
+                canvas.scaleX = canvas.width / canvas.logW;
+                canvas.scaleY = canvas.height / canvas.logH;
+            }
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+
+            const W = 400, H = 700;
+            const WIND_ANGLE = 0;
+            const MAX_SAIL_ANGLE = 1.2;
+            const WIND_SPEED = 1.0;
+
+            let boat = {
+                x: 200, y: 350,
+                heading: 0.8,
+                speed: 0,
+                sailOffset: 0.5,
+                rudder: 0,
+                centerboard: 0.5,
+                driftX: 0,
+                driftY: 0
+            };
+
+            const buoys = [
+                { x: 140, y: 200, color: 'red', label: '1' },
+                { x: 260, y: 280, color: 'green', label: '2' },
+                { x: 150, y: 420, color: 'red', label: '3' },
+                { x: 250, y: 520, color: 'green', label: '4' },
+                { x: 180, y: 620, color: 'red', label: '5' },
+            ];
+
+            // ---------- 物理函数 ----------
+            function calcSpeed(heading) {
+                let diff = heading - WIND_ANGLE;
+                diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+                const absDiff = Math.abs(diff);
+                if (absDiff < 0.52) return 0;
+                if (absDiff < 1.57) {
+                    const x = (absDiff - 0.52) / 1.05;
+                    return 1 - Math.exp(-12 * x);
+                }
+                return 1.0 - (absDiff - 1.57) / 1.57 * 0.5;
+            }
+
+            function calcSailEfficiency(heading, sailOffset) {
+                let diff = heading - WIND_ANGLE;
+                diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+                const absDiff = Math.abs(diff);
+                let optimalOffset;
+                if (absDiff < 1.57) {
+                    const t = (absDiff - 0.52) / 1.05;
+                    optimalOffset = 0.0 + t * 0.5;
+                } else {
+                    const t = (absDiff - 1.57) / 1.57;
+                    optimalOffset = 0.5 + t * 0.5;
+                }
+                const deviation = sailOffset - optimalOffset;
+                const penalty = 2.5;
+                let efficiency = 1 - penalty * deviation * deviation;
+                return Math.max(0.3, Math.min(1.0, efficiency));
+            }
+
+            function calcLateralForceCoeff(heading) {
+                let diff = heading - WIND_ANGLE;
+                diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+                const absDiff = Math.abs(diff);
+                if (absDiff < 0.52) return 0;
+                if (absDiff < 1.57) {
+                    const x = (absDiff - 0.52) / 1.05;
+                    return Math.sin(x * Math.PI);
+                } else {
+                    const x = (absDiff - 1.57) / 1.57;
+                    return Math.sin((1 - x) * Math.PI / 2);
+                }
+            }
+
+            function update() {
+                const speedForTurn = Math.min(boat.speed / 0.3, 1.0);
+                const turnBase = 0.045;
+                const turnFactor = 0.4 + 0.6 * (1 - boat.centerboard);
+                boat.heading += boat.rudder * turnBase * turnFactor * speedForTurn;
+
+                const targetSpeed = calcSpeed(boat.heading) * WIND_SPEED;
+                const sailEff = calcSailEfficiency(boat.heading, boat.sailOffset);
+                const finalSpeed = targetSpeed * sailEff;
+                boat.speed += (finalSpeed - boat.speed) * 0.15;
+
+                const diff = boat.heading - WIND_ANGLE;
+                const normDiff = Math.atan2(Math.sin(diff), Math.cos(diff));
+                const side = Math.sign(normDiff);
+                const lateralCoeff = calcLateralForceCoeff(boat.heading);
+                const cbFactor = 0.2 + 0.8 * (1 - boat.centerboard);
+                const driftSpeed = boat.speed * lateralCoeff * 0.18 * cbFactor;
+                const rudderDrift = -boat.speed * 0.12 * Math.sin(boat.rudder * 1.2) * (0.5 + 0.5 * (1 - boat.centerboard));
+                const totalLateral = driftSpeed + rudderDrift;
+
+                const dirX = side * Math.cos(boat.heading);
+                const dirY = side * Math.sin(boat.heading);
+                boat.driftX += dirX * totalLateral;
+                boat.driftY += dirY * totalLateral;
+                boat.driftX *= 0.97;
+                boat.driftY *= 0.97;
+
+                boat.x += Math.sin(boat.heading) * boat.speed * 1.8;
+                boat.y -= Math.cos(boat.heading) * boat.speed * 1.8;
+                boat.x += boat.driftX;
+                boat.y += boat.driftY;
+
+                if (boat.x < -50) boat.x = 450;
+                if (boat.x > 450) boat.x = -50;
+                if (boat.y < -50) boat.y = 750;
+                if (boat.y > 750) boat.y = -50;
+            }
+
+            // ---------- 绘图 ----------
+            function draw() {
+                const w = canvas.width;
+                const h = canvas.height;
+                const scaleX = canvas.scaleX || 1;
+                const scaleY = canvas.scaleY || 1;
+
+                ctx.clearRect(0, 0, w, h);
+
+                ctx.save();
+                ctx.scale(scaleX, scaleY);
+
+                // 海面网格
+                ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+                ctx.lineWidth = 0.5;
+                for (let i = 0; i < 20; i++) {
+                    const pos = (i * 30 - boat.y % 30) % 700;
+                    ctx.beginPath();
+                    ctx.moveTo(0, pos);
+                    ctx.lineTo(400, pos);
+                    ctx.stroke();
+                }
+                for (let i = 0; i < 15; i++) {
+                    const pos = (i * 30 - boat.x % 30) % 400;
+                    ctx.beginPath();
+                    ctx.moveTo(pos, 0);
+                    ctx.lineTo(pos, 700);
+                    ctx.stroke();
+                }
+
+                // ---- 风向指示（下移至 y=85，避免与速度重叠） ----
+                ctx.save();
+                ctx.translate(50, 85);
+                ctx.shadowColor = 'rgba(255,255,255,0.2)';
+                ctx.shadowBlur = 12;
+                ctx.fillStyle = 'rgba(200,230,255,0.8)';
+                ctx.font = 'bold 28px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('⬆', 0, 0);
+                ctx.font = '12px sans-serif';
+                ctx.fillStyle = 'rgba(255,255,255,0.6)';
+                ctx.fillText('北风', 0, 30);
+                ctx.restore();
+
+                // 浮标
+                buoys.forEach(b => {
+                    const dx = b.x - boat.x + 200;
+                    const dy = b.y - boat.y + 350;
+                    if (dx < -20 || dx > 420 || dy < -20 || dy > 720) return;
+                    ctx.save();
+                    ctx.translate(dx, dy);
+                    const grad = ctx.createRadialGradient(0, 0, 2, 0, 0, 20);
+                    grad.addColorStop(0, b.color === 'red' ? 'rgba(255,60,60,0.9)' : 'rgba(60,255,60,0.9)');
+                    grad.addColorStop(1, 'rgba(0,0,0,0)');
+                    ctx.fillStyle = grad;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 20, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+                    ctx.shadowBlur = 8;
+                    ctx.fillStyle = b.color;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 10, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                    ctx.fillStyle = 'white';
+                    ctx.font = 'bold 12px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(b.label, 0, 1);
+                    ctx.restore();
+                });
+
+                // 帆船
+                ctx.save();
+                ctx.translate(200, 350);
+                ctx.rotate(boat.heading);
+
+                ctx.shadowColor = 'rgba(0,0,0,0.3)';
+                ctx.shadowBlur = 15;
+                ctx.shadowOffsetY = 4;
+                ctx.beginPath();
+                ctx.moveTo(0, -48);
+                ctx.quadraticCurveTo(22, -20, 18, 14);
+                ctx.lineTo(12, 34);
+                ctx.lineTo(-12, 34);
+                ctx.lineTo(-18, 14);
+                ctx.quadraticCurveTo(-22, -20, 0, -48);
+                ctx.closePath();
+                ctx.fillStyle = '#6b4c2a';
+                ctx.fill();
+                ctx.strokeStyle = '#3d2916';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+
+                ctx.shadowBlur = 0;
+                ctx.strokeStyle = '#8b6b4a';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(0, -24);
+                ctx.lineTo(0, 24);
+                ctx.stroke();
+
+                const mastPt = { x: 0, y: -20 };
+                ctx.strokeStyle = '#4a3520';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(mastPt.x, mastPt.y - 32);
+                ctx.lineTo(mastPt.x, mastPt.y + 4);
+                ctx.stroke();
+
+                // 帆
+                const diffWind = boat.heading - WIND_ANGLE;
+                const normDiff = Math.atan2(Math.sin(diffWind), Math.cos(diffWind));
+                let sailSide = Math.sign(normDiff);
+                if (sailSide === 0) sailSide = 1;
+                const sailAngle = sailSide * boat.sailOffset * MAX_SAIL_ANGLE;
+                const sailLength = 38;
+                const clew = {
+                    x: mastPt.x + sailLength * Math.sin(sailAngle),
+                    y: mastPt.y + sailLength * Math.cos(sailAngle)
+                };
+                const power = Math.min(boat.speed, 1.0);
+                const bulge = 8 + power * 16;
+
+                ctx.save();
+                ctx.shadowColor = 'rgba(0,0,0,0.15)';
+                ctx.shadowBlur = 8;
+                ctx.beginPath();
+                ctx.moveTo(mastPt.x, mastPt.y);
+                const midX = (mastPt.x + clew.x) / 2;
+                const midY = (mastPt.y + clew.y) / 2;
+                const dx = clew.x - mastPt.x;
+                const dy = clew.y - mastPt.y;
+                const len = Math.hypot(dx, dy);
+                if (len > 0.001) {
+                    let perpX = -dy / len;
+                    let perpY = dx / len;
+                    if (sailSide * perpX < 0) {
+                        perpX = -perpX;
+                        perpY = -perpY;
+                    }
+                    const ctrlX = midX + perpX * bulge;
+                    const ctrlY = midY + perpY * bulge;
+                    ctx.quadraticCurveTo(ctrlX, ctrlY, clew.x, clew.y);
+                } else {
+                    ctx.lineTo(clew.x, clew.y);
+                }
+                ctx.closePath();
+                ctx.fillStyle = 'rgba(255, 248, 235, 0.75)';
+                ctx.fill();
+                ctx.strokeStyle = '#2c3e50';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+
+                ctx.beginPath();
+                ctx.moveTo(mastPt.x, mastPt.y);
+                ctx.lineTo(clew.x, clew.y);
+                ctx.strokeStyle = '#5d4e37';
+                ctx.lineWidth = 2.5;
+                ctx.stroke();
+
+                ctx.setLineDash([3, 4]);
+                ctx.lineWidth = 1.0;
+                ctx.strokeStyle = '#7a6b5a';
+                ctx.beginPath();
+                ctx.moveTo(mastPt.x, mastPt.y);
+                ctx.lineTo(clew.x, clew.y);
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                // 标注
+                ctx.fillStyle = '#f1c40f';
+                ctx.shadowColor = 'rgba(0,0,0,0.5)';
+                ctx.shadowBlur = 6;
+                ctx.beginPath();
+                ctx.arc(mastPt.x, mastPt.y, 5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = '#ecf0f1';
+                ctx.font = 'bold 10px sans-serif';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'bottom';
+                ctx.fillText('桅杆', mastPt.x + 8, mastPt.y - 2);
+
+                ctx.fillStyle = '#e74c3c';
+                ctx.shadowBlur = 6;
+                ctx.beginPath();
+                ctx.arc(clew.x, clew.y, 5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = '#ecf0f1';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'bottom';
+                ctx.fillText('clew', clew.x + 8, clew.y - 2);
+
+                ctx.restore();
+
+                // 舵叶
+                ctx.save();
+                ctx.translate(0, 28);
+                ctx.rotate(-boat.rudder * 0.6);
+                ctx.fillStyle = '#4a3a2a';
+                ctx.shadowBlur = 6;
+                ctx.fillRect(-4, 0, 8, 16);
+                ctx.restore();
+
+                ctx.restore(); // 船体
+
+                // ---- HUD：速度（左上）和航向（右上），左右对称 ----
+                ctx.save();
+                ctx.shadowBlur = 0;
+
+                // 左上：速度
+                ctx.fillStyle = 'rgba(0,0,0,0.4)';
+                ctx.roundRect(10, 10, 100, 36, 8);
+                ctx.fill();
+                ctx.fillStyle = '#7fdbff';
+                ctx.font = 'bold 16px monospace';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('⚡ ' + (boat.speed * 6).toFixed(1) + ' kn', 20, 28);
+
+                // 右上：航向（与速度背景左右对称）
+                const diff = Math.atan2(Math.sin(boat.heading - WIND_ANGLE), Math.cos(boat.heading - WIND_ANGLE));
+                const isInIrons = Math.abs(Math.abs(diff) - 0) < 0.52;
+                // 对称背景：x = 400 - 10 - 100 = 290
+                ctx.fillStyle = 'rgba(0,0,0,0.4)';
+                ctx.roundRect(290, 10, 100, 36, 8);
+                ctx.fill();
+                ctx.fillStyle = '#aaffaa';
+                ctx.textAlign = 'center';
+                ctx.font = 'bold 14px sans-serif';
+                ctx.fillText('航向 ' + ((boat.heading * 180 / Math.PI % 360 + 360) % 360).toFixed(0) + '°', 340, 28);
+
+                // 顶风警告（原位置在右上，现移到右中或保留但调整，避免重叠）
+                // 警告移至更靠右或重叠？为了简洁，我们保留原有警告逻辑，但将其移到速度区域下方或调整位置。
+                // 由于警告信息与航向可能重叠，我们将其放在航向背景下方（y+40）
+                if (isInIrons && boat.speed < 0.1) {
+                    ctx.fillStyle = 'rgba(255,0,0,0.7)';
+                    ctx.roundRect(250, 55, 130, 28, 8);
+                    ctx.fill();
+                    ctx.fillStyle = 'white';
+                    ctx.font = 'bold 12px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('⚠️ 顶风停船', 315, 69);
+                }
+
+                ctx.restore();
+                ctx.restore(); // 整体缩放
+            }
+
+            CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+                if (w < 2 * r) r = w / 2;
+                if (h < 2 * r) r = h / 2;
+                this.moveTo(x + r, y);
+                this.lineTo(x + w - r, y);
+                this.quadraticCurveTo(x + w, y, x + w, y + r);
+                this.lineTo(x + w, y + h - r);
+                this.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+                this.lineTo(x + r, y + h);
+                this.quadraticCurveTo(x, y + h, x, y + h - r);
+                this.lineTo(x, y + r);
+                this.quadraticCurveTo(x, y, x + r, y);
+                this.closePath();
+                return this;
+            };
+
+            // ---------- UI 交互 ----------
+            const sailTrack = document.getElementById('sailTrack');
+            const sailKnob = document.getElementById('sailKnob');
+            const sailLabel = document.getElementById('sailLabel');
+
+            const rudderTrack = document.getElementById('rudderTrack');
+            const rudderKnob = document.getElementById('rudderKnob');
+            const rudderLabel = document.getElementById('rudderLabel');
+
+            const cbTrack = document.getElementById('cbTrack');
+            const cbKnob = document.getElementById('cbKnob');
+            const cbLabel = document.getElementById('cbLabel');
+
+            // 帆（垂直）
+            function updateSailUI() {
+                const pct = boat.sailOffset * 100;
+                const topPct = (1 - boat.sailOffset) * 100;
+                sailKnob.style.top = topPct + '%';
+                sailLabel.textContent = '帆 ' + Math.round(pct) + '%';
+            }
+            function setSailFromEvent(clientY) {
+                const rect = sailTrack.getBoundingClientRect();
+                const relativeY = (clientY - rect.top) / rect.height;
+                let val = Math.max(0, Math.min(1, 1 - relativeY));
+                boat.sailOffset = val;
+                updateSailUI();
+            }
+            sailTrack.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                const touch = e.targetTouches[0];
+                if (touch) setSailFromEvent(touch.clientY);
+            }, { passive: false });
+            sailTrack.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                const touch = e.targetTouches[0];
+                if (touch) setSailFromEvent(touch.clientY);
+            }, { passive: false });
+            sailTrack.addEventListener('mousedown', (e) => {
+                setSailFromEvent(e.clientY);
+            });
+            sailTrack.addEventListener('mousemove', (e) => {
+                if (e.buttons === 1) setSailFromEvent(e.clientY);
+            });
+
+            // 舵（水平）
+            function updateRudderUI() {
+                const pct = boat.rudder * 100;
+                const leftPct = (boat.rudder + 1) / 2 * 100;
+                rudderKnob.style.left = leftPct + '%';
+                rudderLabel.textContent = '舵 ' + Math.round(pct) + '%';
+            }
+            function setRudderFromEvent(clientX) {
+                const rect = rudderTrack.getBoundingClientRect();
+                const relativeX = (clientX - rect.left) / rect.width;
+                let val = Math.max(-1, Math.min(1, relativeX * 2 - 1));
+                if (Math.abs(val) < 0.05) val = 0;
+                boat.rudder = val;
+                updateRudderUI();
+            }
+            rudderTrack.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                const touch = e.targetTouches[0];
+                if (touch) setRudderFromEvent(touch.clientX);
+            }, { passive: false });
+            rudderTrack.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                const touch = e.targetTouches[0];
+                if (touch) setRudderFromEvent(touch.clientX);
+            }, { passive: false });
+            rudderTrack.addEventListener('mousedown', (e) => {
+                setRudderFromEvent(e.clientX);
+            });
+            rudderTrack.addEventListener('mousemove', (e) => {
+                if (e.buttons === 1) setRudderFromEvent(e.clientX);
+            });
+
+            // 舵松手回正
+            let rudderTouched = false;
+            rudderTrack.addEventListener('touchstart', () => { rudderTouched = true; }, { passive: true });
+            rudderTrack.addEventListener('touchend', (e) => {
+                rudderTouched = false;
+                setTimeout(() => {
+                    if (!rudderTouched) {
+                        boat.rudder = 0;
+                        updateRudderUI();
+                    }
+                }, 30);
+            }, { passive: false });
+            let rudderMouseDown = false;
+            rudderTrack.addEventListener('mousedown', () => { rudderMouseDown = true; });
+            document.addEventListener('mouseup', (e) => {
+                if (rudderMouseDown) {
+                    rudderMouseDown = false;
+                    setTimeout(() => {
+                        if (!rudderMouseDown) {
+                            boat.rudder = 0;
+                            updateRudderUI();
+                        }
+                    }, 30);
+                }
+            });
+
+            // 龙骨（垂直长条）
+            function updateCBUI() {
+                const pct = boat.centerboard * 100;
+                const topPct = boat.centerboard * 100;
+                cbKnob.style.top = topPct + '%';
+                let status = '中';
+                if (pct < 33) status = '升';
+                else if (pct > 66) status = '降';
+                cbLabel.textContent = '龙骨 ' + status;
+            }
+            function setCBFromEvent(clientY) {
+                const rect = cbTrack.getBoundingClientRect();
+                const relativeY = (clientY - rect.top) / rect.height;
+                let val = Math.max(0, Math.min(1, relativeY));
+                boat.centerboard = val;
+                updateCBUI();
+            }
+            cbTrack.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                const touch = e.targetTouches[0];
+                if (touch) setCBFromEvent(touch.clientY);
+            }, { passive: false });
+            cbTrack.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                const touch = e.targetTouches[0];
+                if (touch) setCBFromEvent(touch.clientY);
+            }, { passive: false });
+            cbTrack.addEventListener('mousedown', (e) => {
+                setCBFromEvent(e.clientY);
+            });
+            cbTrack.addEventListener('mousemove', (e) => {
+                if (e.buttons === 1) setCBFromEvent(e.clientY);
+            });
+
+            updateSailUI();
+            updateRudderUI();
+            updateCBUI();
+
+            // ---------- 游戏循环 ----------
+            function gameLoop() {
+                update();
+                draw();
+                requestAnimationFrame(gameLoop);
+            }
+
+            gameLoop();
+
+            window.addEventListener('resize', () => {
+                resizeCanvas();
+            });
+
+        })();
+    </script>
+</body>
+
+</html>
