@@ -89,6 +89,9 @@
         padding:1px 6px;
         font-weight:600;
     }
+    .card.guide { border-color:rgba(46,204,113,0.45); background:linear-gradient(180deg,#10404f,#0d3b4c); }
+    .card.guide:hover { border-color:rgba(46,204,113,0.8); }
+    .ver.guide { background:var(--green); color:#04141c; }
     footer { margin-top:32px; text-align:center; font-size:11px; color:rgba(232,244,248,0.25); }
 </style>
 </head>
@@ -105,6 +108,17 @@
         Older versions are kept forever, so links that were shared never break.
         V0.1&ndash;V0.4 keep their original Chinese interface; V0.5 onward are English.
     </div>
+
+    <a class="card guide" href="principles.html">
+        <div class="card-top">
+            <span class="ver guide">How it works</span>
+            <span class="card-title">Sailing Principles</span>
+        </div>
+        <div class="card-desc">Not a version &mdash; a top-down explainer. Aim the bow anywhere on a large
+            plan view and watch the sail, rudder and centreboard change the numbers in real time: drive,
+            turn rate, leeway, speed and velocity made good. Runs on the same physics as the simulator.</div>
+        <div class="card-meta">principles.html</div>
+    </a>
 
     <a class="card current" href="20261017-demo-V1.0-control-tolerance.html">
         <div class="card-top">
