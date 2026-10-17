@@ -38,6 +38,12 @@ window.SimCore = (function () {
     const MAX_LEEWAY_DOWN = 12 / DEG;    // centreboard fully down
     const MAX_LEEWAY_UP = 38 / DEG;      // centreboard fully raised
 
+    // Yaw authority per frame at full helm. Chosen so the peak rate is about
+    // 6 deg/s: a dinghy under sail answers the helm in roughly 3-6 deg/s, and
+    // 0.045 rad/frame (the old value) was spinning the bow through 90 deg in
+    // 1.2 s, which is nothing like a real boat.
+    const TURN_BASE = 0.00175;
+
     function tableLookup(table, deg) {
         if (deg <= table[0][0]) return table[0][1];
         for (let i = 0; i < table.length - 1; i++) {
@@ -104,10 +110,11 @@ window.SimCore = (function () {
 
         const leeway = calcLeewayAngle(heading, board);
 
-        // Turn rate from the simulator's own steering term, per 60 fps frame.
+        // Turn rate from the steering term, per 60 fps frame. Yaw authority needs
+        // water flowing past the blade, so it fades out as the boat stops.
         const speedForTurn = Math.min((Math.abs(speed) + 0.05) / 0.3, 1.0);
         const turnFactor = 0.4 + 0.6 * (1 - board);
-        const turnRate = rudder * 0.045 * turnFactor * speedForTurn * 60 * DEG;
+        const turnRate = rudder * TURN_BASE * turnFactor * speedForTurn * 60 * DEG;
 
         // Rudder also swings the stern, which pushes the bow toward the wind.
         const rudderCrab = -speed * 0.12 * Math.sin(rudder * 1.2) * (0.5 + 0.5 * (1 - board));
