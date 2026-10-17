@@ -1,16 +1,16 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>帆船模拟 · 版本索引</title>
+<title>Sailing Simulator &middot; Version Index</title>
 <style>
     * { margin:0; padding:0; box-sizing:border-box; }
     body {
         background:#0a2a3a;
         min-height:100vh;
         color:#e8f4f8;
-        font-family:'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+        font-family:'Segoe UI',Roboto,sans-serif;
         display:flex;
         justify-content:center;
         padding:32px 16px 64px;
@@ -54,7 +54,7 @@
         border-color:rgba(107,207,255,0.45);
         box-shadow:0 8px 24px rgba(0,0,0,0.45);
     }
-    .card-top { display:flex; align-items:baseline; gap:10px; }
+    .card-top { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
     .ver {
         font-family:Consolas,Monaco,monospace;
         font-size:13px;
@@ -73,14 +73,21 @@
     .card-meta { margin-top:10px; font-size:11px; color:rgba(232,244,248,0.3); font-family:Consolas,Monaco,monospace; }
     .badge {
         display:inline-block;
-        margin-left:8px;
         font-size:10px;
         color:#04141c;
         background:#ffb347;
         border-radius:4px;
         padding:1px 6px;
-        vertical-align:middle;
         font-weight:bold;
+    }
+    .tag {
+        display:inline-block;
+        font-size:10px;
+        color:rgba(232,244,248,0.65);
+        background:rgba(255,255,255,0.12);
+        border-radius:4px;
+        padding:1px 6px;
+        font-weight:600;
     }
     footer { margin-top:32px; text-align:center; font-size:11px; color:rgba(232,244,248,0.25); }
 </style>
@@ -89,49 +96,64 @@
 <div class="wrap">
 
     <header>
-        <h1>帆船模拟 · 版本索引</h1>
+        <h1>Sailing Simulator &middot; Version Index</h1>
         <p>Sailing Physics Simulator &mdash; Build History</p>
     </header>
 
     <div class="hint">
-        每次发布新增一个版本文件，<b>本页面只在最上方替换版本号</b>。
-        历史版本永久保留，老链接不会失效。
+        Each release adds a new version file; <b>only the badge at the top of this page changes</b>.
+        Older versions are kept forever, so links that were shared never break.
+        V0.1&ndash;V0.4 keep their original Chinese interface; V0.5 onward are English.
     </div>
 
-    <a class="card current" href="20260819-demo-V0.4-counterwind.html">
+    <a class="card current" href="20261017-demo-V0.5-english.html">
+        <div class="card-top">
+            <span class="ver">V0.5</span>
+            <span class="card-title">English Edition</span>
+            <span class="badge">Current</span>
+            <span class="tag">EN</span>
+        </div>
+        <div class="card-desc">All user-facing text and code comments translated to English, page language set to <code>en</code>. Simulation logic is identical to V0.4.</div>
+        <div class="card-meta">2026-10-17 &middot; 20261017-demo-V0.5-english.html</div>
+    </a>
+
+    <a class="card old" href="20260819-demo-V0.4-counterwind.html">
         <div class="card-top">
             <span class="ver">V0.4</span>
-            <span class="card-title">逆风转向</span>
-            <span class="badge">当前版本</span>
+            <span class="card-title">Counterwind</span>
+            <span class="tag">Chinese UI</span>
         </div>
-        <div class="card-desc">转向不再完全依赖航速：静止或顶风僵死时仍保留基础转向能力，可转舵脱离顶风。同时拆分漂移与舵效计算，补充分段注释。</div>
+        <div class="card-desc">Steering no longer depends entirely on boat speed &mdash; a base turning ability is retained while at rest or stalled head-to-wind, so the rudder can be used to escape being in irons. Drift and rudder-force calculations split apart, with sectional comments added.</div>
         <div class="card-meta">2026-08-19 &middot; 20260819-demo-V0.4-counterwind.html</div>
     </a>
 
     <a class="card old" href="20260819-demo-V0.3-minify.html">
         <div class="card-top">
             <span class="ver">V0.3</span>
-            <span class="card-title">代码精简</span>
+            <span class="card-title">Minify</span>
+            <span class="tag">Chinese UI</span>
         </div>
-        <div class="card-desc">重构并压缩代码，827 &rarr; 363 行、30KB &rarr; 19.5KB，移除冗余逻辑与调试代码。</div>
+        <div class="card-desc">Refactored and compressed the code, 827 &rarr; 363 lines and 30KB &rarr; 19.5KB, removing redundant logic and debug code.</div>
         <div class="card-meta">2026-08-19 &middot; 20260819-demo-V0.3-minify.html</div>
     </a>
 
     <a class="card old" href="20260819-demo-V0.2.html">
         <div class="card-top">
             <span class="ver">V0.2</span>
-            <span class="card-title">三操控区</span>
+            <span class="card-title">Three Control Zones</span>
+            <span class="tag">Chinese UI</span>
         </div>
-        <div class="card-desc">帆、舵、中心板三个独立圆形滑杆操控区，交互从单控件升级为三区联动。</div>
+        <div class="card-desc">Sail, rudder and centerboard each get their own circular slider zone, upgrading the interaction from a single control to three linked zones.</div>
         <div class="card-meta">2026-08-19 &middot; 20260819-demo-V0.2.html</div>
     </a>
 
     <a class="card old" href="20260818-demo-V0.1.html">
         <div class="card-top">
             <span class="ver">V0.1</span>
-            <span class="card-title">教学示意版</span>
+            <span class="card-title">Teaching Demo</span>
+            <span class="tag">Chinese UI</span>
         </div>
-        <div class="card-desc">首个可运行版本，建立帆船物理模型（航速、帆效、侧向力）与顶风停船判定。</div>
+        <div class="card-desc">First runnable version, establishing the sailing physics model (speed, sail efficiency, lateral force) and the head-to-wind stall detection.</div>
         <div class="card-meta">2026-08-18 &middot; 20260818-demo-V0.1.html</div>
     </a>
 
