@@ -84,34 +84,36 @@
                change the numbers as you move them.</p>
         </div>
 
-        <a class="card current" href="20261017-howitworks-V0.3-mobile.html">
+        <a class="card draft" href="20261017-howitworks-V0.3-mobile.html">
             <div class="card-top">
                 <span class="ver">V0.3</span>
                 <span class="card-title">Smooth &amp; Unobstructed</span>
-                <span class="badge">Current</span>
+                <span class="draftbadge">Draft</span>
             </div>
-            <div class="card-desc">Two fixes. Boat speed is now carried frame to frame and eased toward its
-                target, like the simulator does, instead of re-solving 300 iterations on every redraw &mdash;
-                moving a control no longer makes the diagram jump. And the readouts are plain text: result at
-                the top, control data down the left, no panel behind them, so nothing covers the rudder.</div>
+            <div class="card-desc">Fixed a unit bug that was drawing the sail and the leeway wedge at about
+                1446&nbsp;radians, which is what made the plan view jump: the largest per-step change in a
+                drawn coordinate drops from 11294&nbsp;px to 1.2&nbsp;px. Readouts moved to plain text &mdash;
+                result at the top, control data down the left, nothing covering the rudder.</div>
             <div class="card-meta">2026-10-17 &middot; 20261017-howitworks-V0.3-mobile.html</div>
         </a>
 
-        <a class="card" href="20261017-howitworks-V0.2-mobile.html">
+        <a class="card draft" href="20261017-howitworks-V0.2-mobile.html">
             <div class="card-top">
                 <span class="ver">V0.2</span>
                 <span class="card-title">Mobile Explainer</span>
+                <span class="draftbadge">Draft</span>
             </div>
-            <div class="card-desc">Rebuilt for a phone held upright: full-screen top-down view, the three
-                controls along the bottom in the same size and style as the simulator, and the written
-                explanations turned into popups that appear when the situation arises.</div>
+            <div class="card-desc">First cut for a phone held upright: full-screen top-down view, controls
+                along the bottom in the simulator's style, and the written explanations turned into popups.
+                Carried the same drawing bug as V0.3.</div>
             <div class="card-meta">2026-10-17 &middot; 20261017-howitworks-V0.2-mobile.html</div>
         </a>
 
-        <a class="card" href="20261017-howitworks-V0.1-topview.html">
+        <a class="card draft" href="20261017-howitworks-V0.1-topview.html">
             <div class="card-top">
                 <span class="ver">V0.1</span>
                 <span class="card-title">Top-Down Explainer</span>
+                <span class="draftbadge">Draft</span>
             </div>
             <div class="card-desc">The first cut: a large plan view of the hull with the sail, board and
                 rudder drawn to scale, a data panel beside it and the speed polar. Laid out for a desktop
@@ -141,27 +143,28 @@
             <div class="card-meta">2026-10-17 &middot; 20261017-demo-V1.2-backing-draft.html</div>
         </a>
 
-        <a class="card current" href="20261017-demo-V1.1-turnrate.html">
-            <div class="card-top">
-                <span class="ver">V1.1</span>
-                <span class="card-title">Realistic Turn Rate</span>
-                <span class="badge">Current</span>
-            </div>
-            <div class="card-desc">The boat answers the helm far too fast: a full rudder swung the bow
-                through 90&deg; in 1.2&nbsp;s. Yaw authority now peaks near 6&deg;/s, which is what a dinghy
-                actually gives, and fades away as the boat slows.</div>
-            <div class="card-meta">2026-10-17 &middot; 20261017-demo-V1.1-turnrate.html</div>
-        </a>
-
-        <a class="card" href="20261017-demo-V1.0-control-tolerance.html">
+        <a class="card current" href="20261017-demo-V1.0-control-tolerance.html">
             <div class="card-top">
                 <span class="ver">V1.0</span>
                 <span class="card-title">Control Tolerance</span>
+                <span class="badge">Current</span>
             </div>
-            <div class="card-desc">A tap no longer has to land on the 4&nbsp;px track &mdash; anything
-                within 50&nbsp;px grabs a control, and once grabbed the drag keeps working along that
-                control's axis even if the pointer wanders off.</div>
+            <div class="card-desc">The official build. A tap no longer has to land on the 4&nbsp;px track &mdash;
+                anything within 50&nbsp;px grabs a control, and once grabbed the drag keeps working along
+                that control's axis even if the pointer wanders off.</div>
             <div class="card-meta">2026-10-17 &middot; 20261017-demo-V1.0-control-tolerance.html</div>
+        </a>
+
+        <a class="card draft" href="20261017-demo-V1.1-turnrate.html">
+            <div class="card-top">
+                <span class="ver">V1.1</span>
+                <span class="card-title">Realistic Turn Rate</span>
+                <span class="draftbadge">Draft</span>
+            </div>
+            <div class="card-desc">Turn-rate work in progress. A full rudder swung the bow through 90&deg; in
+                1.2&nbsp;s, so yaw authority was cut to a peak near 6&deg;/s. Part of the turning work, not a
+                release.</div>
+            <div class="card-meta">2026-10-17 &middot; 20261017-demo-V1.1-turnrate.html</div>
         </a>
 
         <a class="card" href="20261017-demo-V0.9-rudder-release.html">

@@ -50,7 +50,7 @@ window.SimCore = (function () {
     // reason the manoeuvre works, so this term deliberately does NOT scale with
     // speed the way helm authority does. It only bites while turning toward
     // the wind and while still near it.
-    const BACKING_ZONE = 1.35;   // ~43 deg either side of the wind
+    const BACKING_ZONE = 1.6;    // ~51 deg either side of the wind, so it bites from close-hauled
     const BACKING_RATE = 0.0052; // rad per frame at full helm, ~18 deg/s
     const BACKING_DRAG = 0.45;   // fraction of speed scrubbed off while backed
 

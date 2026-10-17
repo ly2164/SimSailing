@@ -195,7 +195,7 @@
         // is the whole reason the manoeuvre works, so this term deliberately
         // does NOT scale with speed. An experiment: the helm gesture is not
         // settled yet and the resulting turn is not predictable.
-        const BACKING_ZONE = 1.35;   // ~43 deg either side of the wind
+        const BACKING_ZONE = 1.6;    // ~51 deg either side of the wind, so it bites from close-hauled
         const BACKING_RATE = 0.0052; // rad per frame at full helm, ~18 deg/s
         const BACKING_DRAG = 0.45;   // fraction of speed scrubbed off
 
@@ -300,8 +300,11 @@
         const mastPt = {x:0, y:-20};
         ctx.strokeStyle='#4a3520'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(mastPt.x,mastPt.y-32); ctx.lineTo(mastPt.x,mastPt.y+4); ctx.stroke();
 
-        // Sail
+        // Sail. Backing is what puts the boom out to WINDWARD, so the sail is
+        // drawn on the opposite side while that is going on - otherwise there
+        // is nothing on screen to show the manoeuvre is happening.
         let sailSide = Math.sign(angleOffWind(boat.heading)) || 1;
+        if (boat.backing) sailSide = -sailSide;
         const sailAngle = sailSide * boat.sailOffset * MAX_SAIL_ANGLE;
         const sailLength = 38;
         const clew = {
@@ -353,6 +356,11 @@
             ctx.fillStyle='rgba(255,0,0,0.7)'; ctx.roundRect(250,55,130,28,8); ctx.fill();
             ctx.fillStyle='white'; ctx.font='bold 12px sans-serif'; ctx.textAlign='center';
             ctx.fillText('⚠ In Irons',315,69);
+        }
+        if (boat.backing) {
+            ctx.fillStyle='rgba(255,179,71,0.9)'; ctx.roundRect(245,92,140,26,8); ctx.fill();
+            ctx.fillStyle='#04141c'; ctx.font='bold 11px sans-serif'; ctx.textAlign='center';
+            ctx.fillText('BACKING SAIL',315,109);
         }
         ctx.restore();
         ctx.restore(); // overall scale

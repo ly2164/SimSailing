@@ -526,8 +526,9 @@
         pctx.beginPath(); pctx.moveTo(cx, cy); pctx.lineTo(cx + hx * H * 0.34, cy + hy * H * 0.34); pctx.stroke();
         pctx.restore();
 
-        // actual track, deflected to leeward
-        const lw = a.leewayDeg * DEG * (a.twaDeg >= 0 ? 1 : -1);
+        // The actual track, deflected to leeward. leewayDeg comes out of analyse in
+        // degrees, so it is DIVIDED by DEG to get the radians the canvas wants.
+        const lw = a.leewayDeg / DEG * (a.twaDeg >= 0 ? 1 : -1);
         const tr = helm.heading + lw;
         const tx = Math.sin(tr), ty = -Math.cos(tr);
         arrow(pctx, cx, cy, cx + tx * H * 0.34, cy + ty * H * 0.34, '#2ecc71', 3, 11);
@@ -599,7 +600,7 @@
         pctx.restore();
 
         const mastY = -34 * K;
-        const sa = a.sailAngleDeg * DEG;
+        const sa = a.sailAngleDeg / DEG;      // degrees -> radians, same as leeway above
         const L = 74 * K;
         const cxSail = Math.sin(sa) * L, cySail = mastY + Math.cos(sa) * L;
         pctx.beginPath();
