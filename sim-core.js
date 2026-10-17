@@ -155,16 +155,23 @@ window.SimCore = (function () {
 
         const leeway = calcLeewayAngle(heading, board);
 
+        // Rudder side force. A rudder works by deflecting water, so its force
+        // scales with the dynamic pressure, roughly v squared, not with v.
+        // Modelling it as linear with v left it almost invisible at speed.
+        const rudderCrab = -speed * speed * 0.22 * Math.sin(rudder * 1.2) * (0.5 + 0.5 * (1 - board));
+        const leewaySpeed = speed * 1.8 * Math.tan(leeway);
+        const lateral = leewaySpeed + rudderCrab;
+        const forward = speed * 1.8;
+
+        // The sideways slip the hull actually has includes the rudder's crab,
+        // so holding the helm over visibly bends the track. Reporting only the
+        // board term made the rudder look like it did nothing at all.
+        const totalLeeway = forward > 0 ? Math.atan2(Math.abs(lateral), forward) : 0;
+
 // Yaw authority needs water flowing past the blade, so helm fades out as the
         // boat stops; the backing term is sail-driven and does not.
-        const t = turnStep(heading, rudder, speed, board);
+const t = turnStep(heading, rudder, speed, board);
         const turnRate = t.step * 60 * DEG;
-
-        // Rudder also swings the stern, which pushes the bow toward the wind.
-        const rudderCrab = -speed * 0.12 * Math.sin(rudder * 1.2) * (0.5 + 0.5 * (1 - board));
-        const leewaySpeed = speed * 1.8 * Math.tan(leeway);
-        const lateral = Math.abs(leewaySpeed + rudderCrab);
-        const forward = speed * 1.8;
 
         return {
             heading,
@@ -183,7 +190,9 @@ window.SimCore = (function () {
             sailSide,
             idealSailAngleDeg: want * MAX_SAIL_ANGLE * DEG,
 
-            leewayDeg: leeway * DEG,
+leewayDeg: totalLeeway * DEG,
+            hullLeewayDeg: leeway * DEG,
+            crabDeg: Math.abs(totalLeeway * DEG - leeway * DEG),
             turnRate,
 
 driveFrac: forward,
