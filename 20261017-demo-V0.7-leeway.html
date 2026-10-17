@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sailing Simulator &middot; Leeway Fix</title>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-touch-callout:none; }
+        body { background:#0a2a3a; display:flex; justify-content:center; align-items:center; height:100vh; overflow:hidden; font-family:'Segoe UI',sans-serif; touch-action:pan-y; }
+        #gameWrapper { position:relative; width:100vw; height:100vh; max-width:450px; max-height:800px; background:#0d3b4c; border-radius:12px; box-shadow:0 0 40px rgba(0,0,0,0.7); overflow:hidden; touch-action:none; }
+        canvas { display:block; width:100%; height:100%; background:#0d3b4c; touch-action:none; pointer-events:none; }
+
+        .circle-control {
+            position:absolute; top:80%; transform:translateY(-50%);
+            width:150px; height:150px; border-radius:50%;
+            background:rgba(0,0,0,0.2); backdrop-filter:blur(4px);
+            border:1px solid rgba(255,255,255,0.1);
+            display:flex; align-items:center; justify-content:center; flex-direction:column;
+            touch-action:none; pointer-events:auto;
+        }
+        .circle-control .track {
+            background:rgba(255,255,255,0.2); border-radius:2px; position:relative;
+            touch-action:none;
+        }
+        .circle-control .knob {
+            position:absolute; top:50%; left:50%; transform:translate(-50%, -50%);
+            width:28px; height:28px; border-radius:50%;
+            box-shadow:0 0 12px rgba(0,0,0,0.3);
+            pointer-events:none; transition:top 0.05s, left 0.05s;
+        }
+        .circle-control .label {
+            position:absolute; top:calc(100% + 6px); left:50%; transform:translateX(-50%);
+            font-size:12px; font-weight:bold; text-shadow:0 1px 4px rgba(0,0,0,0.5);
+            white-space:nowrap;
+        }
+        #sailControl { left:8%; }
+        #sailControl .track { width:4px; height:80%; }
+        #sailControl .knob { background:#6bcfff; box-shadow:0 0 12px rgba(107,207,255,0.4); }
+        #sailControl .label { color:#6bcfff; }
+
+        #rudderControl { right:8%; }
+        #rudderControl .track { height:4px; width:80%; }
+        #rudderControl .knob { background:#ffb347; box-shadow:0 0 12px rgba(255,179,71,0.4); }
+        #rudderControl .label { color:#ffb347; }
+
+        #centerboardControl {
+            position:absolute; top:80%; left:50%; transform:translate(-50%, -50%);
+            width:40px; height:150px; border-radius:20px;
+            background:rgba(0,0,0,0.2); backdrop-filter:blur(4px);
+            border:1px solid rgba(255,255,255,0.1);
+            display:flex; align-items:center; justify-content:center; flex-direction:column;
+            touch-action:none; pointer-events:auto;
+        }
+        #centerboardControl .track { width:4px; height:80%; background:rgba(255,255,255,0.2); border-radius:2px; position:relative; touch-action:none; }
+        #centerboardControl .knob {
+            position:absolute; top:50%; left:50%; transform:translate(-50%, -50%);
+            width:24px; height:24px; background:#2ecc71; border-radius:50%;
+            box-shadow:0 0 12px rgba(46,204,113,0.5);
+            pointer-events:none; transition:top 0.05s;
+        }
+        #centerboardControl .label {
+            position:absolute; top:calc(100% + 6px); left:50%; transform:translateX(-50%);
+            font-size:12px; font-weight:bold; color:#2ecc71; text-shadow:0 1px 4px rgba(0,0,0,0.5);
+            white-space:nowrap;
+        }
+        @media (max-width:400px) {
+            .circle-control { width:120px; height:120px; }
+            .circle-control .knob { width:24px; height:24px; }
+            #centerboardControl { width:34px; height:120px; }
+            #centerboardControl .knob { width:20px; height:20px; }
+        }
+        @media (max-width:360px) {
+            .circle-control { width:100px; height:100px; }
+            .circle-control .knob { width:20px; height:20px; }
+            #centerboardControl { width:28px; height:100px; }
+            #centerboardControl .knob { width:16px; height:16px; }
+        }
+    </style>
+</head>
+<body>
+<div id="gameWrapper">
+    <canvas id="gameCanvas"></canvas>
+    <div id="sailControl" class="circle-control">
+        <div class="track" id="sailTrack"><div class="knob" id="sailKnob" style="top:50%;"></div></div>
+        <div class="label" id="sailLabel">Sail 50%</div>
+    </div>
+    <div id="rudderControl" class="circle-control">
+        <div class="track" id="rudderTrack"><div class="knob" id="rudderKnob" style="left:50%;"></div></div>
+        <div class="label" id="rudderLabel">Rudder 0%</div>
+    </div>
+    <div id="centerboardControl">
+        <div class="track" id="cbTrack"><div class="knob" id="cbKnob" style="top:50%;"></div></div>
+        <div class="label" id="cbLabel">Centerboard Mid</div>
+    </div>
+</div>
+
+<script>
+(function(){
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    function resizeCanvas() {
+        const rect = document.getElementById('gameWrapper').getBoundingClientRect();
+        canvas.width = rect.width; canvas.height = rect.height;
+        canvas.style.width = rect.width + 'px'; canvas.style.height = rect.height + 'px';
+        canvas.logW = 400; canvas.logH = 700;
+        canvas.scaleX = canvas.width / canvas.logW; canvas.scaleY = canvas.height / canvas.logH;
+    }
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    const W = 400, H = 700, WIND_ANGLE = 0, MAX_SAIL_ANGLE = 1.2, WIND_SPEED = 1.0;
+
+    // ---- Sailing physics ----
+    // No-go zone: a small dinghy cannot point closer than ~32 deg to the true wind.
+    const NO_GO = 32 * Math.PI / 180;
+    const BEAM = Math.PI / 2;
+
+    // Measured sailing polar for a small dinghy: boat speed as a fraction of the
+    // maximum, versus angle off the wind in degrees. Peak sits at beam reach
+    // (90 deg); dead downwind is slower than a beam reach.
+    const POLAR = [
+        [  0, 0.00], [ 32, 0.00], [ 35, 0.35], [ 40, 0.52], [ 45, 0.62],
+        [ 50, 0.68], [ 60, 0.78], [ 70, 0.86], [ 80, 0.94], [ 90, 1.00],
+        [100, 0.97], [110, 0.93], [120, 0.88], [135, 0.82], [150, 0.76],
+        [180, 0.70]
+    ];
+
+    function angleOffWind(heading) {
+        return Math.atan2(Math.sin(heading - WIND_ANGLE), Math.cos(heading - WIND_ANGLE));
+    }
+    let boat = {
+        x:200, y:350, heading:0.8, speed:0, sailOffset:0.5, rudder:0, centerboard:0.5,
+        driftX:0, driftY:0
+    };
+    const buoys = [
+        {x:140,y:200,color:'red',label:'1'}, {x:260,y:280,color:'green',label:'2'},
+        {x:150,y:420,color:'red',label:'3'}, {x:250,y:520,color:'green',label:'4'},
+        {x:180,y:620,color:'red',label:'5'}
+    ];
+
+    function calcSpeed(heading) {
+        const absDiff = Math.abs(angleOffWind(heading));
+        if (absDiff <= NO_GO) return 0;
+        const deg = absDiff * 180 / Math.PI;
+        for (let i = 0; i < POLAR.length - 1; i++) {
+            const d0 = POLAR[i][0], s0 = POLAR[i][1];
+            const d1 = POLAR[i + 1][0], s1 = POLAR[i + 1][1];
+            if (deg <= d1) return s0 + (s1 - s0) * (deg - d0) / (d1 - d0);
+        }
+        return POLAR[POLAR.length - 1][1];
+    }
+
+    function calcSailEfficiency(heading, sailOffset) {
+        const absDiff = Math.abs(angleOffWind(heading));
+        let optimalOffset;
+        if (absDiff < BEAM) optimalOffset = ((absDiff - NO_GO) / (BEAM - NO_GO)) * 0.5;
+        else optimalOffset = 0.5 + ((absDiff - BEAM) / (Math.PI - BEAM)) * 0.5;
+        let eff = 1 - 2.5 * (sailOffset - optimalOffset) ** 2;
+        return Math.max(0.3, Math.min(1.0, eff));
+    }
+
+    function calcLateralForceCoeff(heading) {
+        const absDiff = Math.abs(angleOffWind(heading));
+        if (absDiff <= NO_GO) return 0;
+        // Side force rises from zero at the edge of the no-go zone, peaks at
+        // beam reach and falls back to zero dead downwind. Continuous throughout.
+        if (absDiff <= BEAM) return Math.sin(((absDiff - NO_GO) / (BEAM - NO_GO)) * Math.PI / 2);
+        return Math.cos(((absDiff - BEAM) / (Math.PI - BEAM)) * Math.PI / 2);
+    }
+
+    function update() {
+        // ---- Steering: keep a base turning ability even when boat speed is 0 ----
+        const effectiveSpeed = Math.abs(boat.speed) + Math.hypot(boat.driftX, boat.driftY) + 0.05;
+        const speedForTurn = Math.min(effectiveSpeed / 0.3, 1.0);
+        const turnBase = 0.045;
+        const turnFactor = 0.4 + 0.6 * (1 - boat.centerboard);
+        boat.heading += boat.rudder * turnBase * turnFactor * speedForTurn;
+
+        // ---- Speed ----
+        const targetSpeed = calcSpeed(boat.heading) * WIND_SPEED;
+        const sailEff = calcSailEfficiency(boat.heading, boat.sailOffset);
+        const finalSpeed = targetSpeed * sailEff;
+        boat.speed += (finalSpeed - boat.speed) * 0.15;
+
+        // ---- Drift ----
+        const side = Math.sign(angleOffWind(boat.heading));
+        const lateralCoeff = calcLateralForceCoeff(boat.heading);
+        const cbFactor = 0.2 + 0.8 * (1 - boat.centerboard);
+        const driftSpeed = boat.speed * lateralCoeff * 0.18 * cbFactor;
+        const rudderDrift = -boat.speed * 0.12 * Math.sin(boat.rudder * 1.2) * (0.5 + 0.5 * (1 - boat.centerboard));
+        const totalLateral = driftSpeed + rudderDrift;
+        const dirX = side * Math.cos(boat.heading);
+        const dirY = side * Math.sin(boat.heading);
+        boat.driftX += dirX * totalLateral;
+        boat.driftY += dirY * totalLateral;
+        boat.driftX *= 0.97;
+        boat.driftY *= 0.97;
+
+        // ---- Position update ----
+        // Screen y grows downward while heading 0 points north, so the forward term
+        // is negated but the drift term is not. Leeway is already in screen
+        // coordinates and always points downwind, so it must be ADDED to y -
+        // negating it here would push the boat into the wind.
+        boat.x += Math.sin(boat.heading) * boat.speed * 1.8 + boat.driftX;
+        boat.y += -Math.cos(boat.heading) * boat.speed * 1.8 + boat.driftY;
+
+        // Wrap at boundaries
+        if (boat.x < -50) boat.x = 450; else if (boat.x > 450) boat.x = -50;
+        if (boat.y < -50) boat.y = 750; else if (boat.y > 750) boat.y = -50;
+    }
+
+    function draw() {
+        const w = canvas.width, h = canvas.height;
+        const sx = canvas.scaleX || 1, sy = canvas.scaleY || 1;
+        ctx.clearRect(0,0,w,h);
+        ctx.save(); ctx.scale(sx, sy);
+
+        // Grid
+        ctx.strokeStyle = 'rgba(255,255,255,0.04)'; ctx.lineWidth=0.5;
+        for (let i=0;i<20;i++) { let pos=(i*30 - boat.y%30)%700; ctx.beginPath(); ctx.moveTo(0,pos); ctx.lineTo(400,pos); ctx.stroke(); }
+        for (let i=0;i<15;i++) { let pos=(i*30 - boat.x%30)%400; ctx.beginPath(); ctx.moveTo(pos,0); ctx.lineTo(pos,700); ctx.stroke(); }
+
+        // Wind direction
+        ctx.save(); ctx.translate(50,85);
+        ctx.shadowColor='rgba(255,255,255,0.2)'; ctx.shadowBlur=12;
+        ctx.fillStyle='rgba(200,230,255,0.8)'; ctx.font='bold 28px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText('⬆',0,0);
+        ctx.font='12px sans-serif'; ctx.fillStyle='rgba(255,255,255,0.6)'; ctx.fillText('North Wind',0,30);
+        ctx.restore();
+
+        // Buoys
+        buoys.forEach(b=>{
+            let dx = b.x - boat.x + 200, dy = b.y - boat.y + 350;
+            if(dx<-20||dx>420||dy<-20||dy>720) return;
+            ctx.save(); ctx.translate(dx,dy);
+            let grad = ctx.createRadialGradient(0,0,2,0,0,20);
+            grad.addColorStop(0, b.color==='red'?'rgba(255,60,60,0.9)':'rgba(60,255,60,0.9)');
+            grad.addColorStop(1,'rgba(0,0,0,0)');
+            ctx.fillStyle=grad; ctx.beginPath(); ctx.arc(0,0,20,0,Math.PI*2); ctx.fill();
+            ctx.shadowColor='rgba(0,0,0,0.5)'; ctx.shadowBlur=8;
+            ctx.fillStyle=b.color; ctx.beginPath(); ctx.arc(0,0,10,0,Math.PI*2); ctx.fill();
+            ctx.shadowBlur=0; ctx.fillStyle='white'; ctx.font='bold 12px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+            ctx.fillText(b.label,0,1);
+            ctx.restore();
+        });
+
+        // Boat
+        ctx.save(); ctx.translate(200,350); ctx.rotate(boat.heading);
+        ctx.shadowColor='rgba(0,0,0,0.3)'; ctx.shadowBlur=15; ctx.shadowOffsetY=4;
+        ctx.beginPath();
+        ctx.moveTo(0,-48); ctx.quadraticCurveTo(22,-20,18,14); ctx.lineTo(12,34); ctx.lineTo(-12,34); ctx.lineTo(-18,14); ctx.quadraticCurveTo(-22,-20,0,-48);
+        ctx.closePath(); ctx.fillStyle='#6b4c2a'; ctx.fill(); ctx.strokeStyle='#3d2916'; ctx.lineWidth=1.5; ctx.stroke();
+        ctx.shadowBlur=0; ctx.strokeStyle='#8b6b4a'; ctx.lineWidth=1;
+        ctx.beginPath(); ctx.moveTo(0,-24); ctx.lineTo(0,24); ctx.stroke();
+
+        const mastPt = {x:0, y:-20};
+        ctx.strokeStyle='#4a3520'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(mastPt.x,mastPt.y-32); ctx.lineTo(mastPt.x,mastPt.y+4); ctx.stroke();
+
+        // Sail
+        let sailSide = Math.sign(angleOffWind(boat.heading)) || 1;
+        const sailAngle = sailSide * boat.sailOffset * MAX_SAIL_ANGLE;
+        const sailLength = 38;
+        const clew = {
+            x: mastPt.x + sailLength * Math.sin(sailAngle),
+            y: mastPt.y + sailLength * Math.cos(sailAngle)
+        };
+        const power = Math.min(boat.speed,1.0);
+        const bulge = 8 + power * 16;
+        ctx.save(); ctx.shadowColor='rgba(0,0,0,0.15)'; ctx.shadowBlur=8;
+        ctx.beginPath(); ctx.moveTo(mastPt.x,mastPt.y);
+        let midX=(mastPt.x+clew.x)/2, midY=(mastPt.y+clew.y)/2;
+        let dx=clew.x-mastPt.x, dy=clew.y-mastPt.y;
+        let len=Math.hypot(dx,dy);
+        if(len>0.001){
+            let perpX=-dy/len, perpY=dx/len;
+            if(sailSide*perpX<0){ perpX=-perpX; perpY=-perpY; }
+            let ctrlX=midX+perpX*bulge, ctrlY=midY+perpY*bulge;
+            ctx.quadraticCurveTo(ctrlX,ctrlY,clew.x,clew.y);
+        } else ctx.lineTo(clew.x,clew.y);
+        ctx.closePath(); ctx.fillStyle='rgba(255,248,235,0.75)'; ctx.fill(); ctx.strokeStyle='#2c3e50'; ctx.lineWidth=2; ctx.stroke(); ctx.shadowBlur=0;
+        ctx.beginPath(); ctx.moveTo(mastPt.x,mastPt.y); ctx.lineTo(clew.x,clew.y); ctx.strokeStyle='#5d4e37'; ctx.lineWidth=2.5; ctx.stroke();
+        ctx.setLineDash([3,4]); ctx.lineWidth=1.0; ctx.strokeStyle='#7a6b5a'; ctx.beginPath(); ctx.moveTo(mastPt.x,mastPt.y); ctx.lineTo(clew.x,clew.y); ctx.stroke(); ctx.setLineDash([]);
+
+        // Annotations
+        ctx.fillStyle='#f1c40f'; ctx.shadowColor='rgba(0,0,0,0.5)'; ctx.shadowBlur=6;
+        ctx.beginPath(); ctx.arc(mastPt.x,mastPt.y,5,0,Math.PI*2); ctx.fill();
+        ctx.shadowBlur=0; ctx.fillStyle='#ecf0f1'; ctx.font='bold 10px sans-serif'; ctx.textAlign='left'; ctx.textBaseline='bottom'; ctx.fillText('Mast',mastPt.x+8,mastPt.y-2);
+        ctx.fillStyle='#e74c3c'; ctx.shadowBlur=6; ctx.beginPath(); ctx.arc(clew.x,clew.y,5,0,Math.PI*2); ctx.fill();
+        ctx.shadowBlur=0; ctx.fillStyle='#ecf0f1'; ctx.textAlign='left'; ctx.textBaseline='bottom'; ctx.fillText('clew',clew.x+8,clew.y-2);
+        ctx.restore();
+
+        // Rudder blade
+        ctx.save(); ctx.translate(0,28); ctx.rotate(-boat.rudder*0.6); ctx.fillStyle='#4a3a2a'; ctx.shadowBlur=6; ctx.fillRect(-4,0,8,16); ctx.restore();
+
+        ctx.restore(); // hull
+
+        // HUD
+        ctx.save(); ctx.shadowBlur=0;
+        ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.roundRect(10,10,100,36,8); ctx.fill();
+        ctx.fillStyle='#7fdbff'; ctx.font='bold 16px monospace'; ctx.textAlign='left'; ctx.textBaseline='middle';
+        ctx.fillText('⚡ '+(boat.speed*6).toFixed(1)+' kn',20,28);
+
+        ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.roundRect(290,10,100,36,8); ctx.fill();
+        ctx.fillStyle='#aaffaa'; ctx.textAlign='center'; ctx.font='bold 14px sans-serif';
+        ctx.fillText('HDG '+((boat.heading*180/Math.PI%360+360)%360).toFixed(0)+'°',340,28);
+
+        const isInIrons = Math.abs(angleOffWind(boat.heading)) < NO_GO;
+        if(isInIrons && boat.speed < 0.1){
+            ctx.fillStyle='rgba(255,0,0,0.7)'; ctx.roundRect(250,55,130,28,8); ctx.fill();
+            ctx.fillStyle='white'; ctx.font='bold 12px sans-serif'; ctx.textAlign='center';
+            ctx.fillText('⚠ In Irons',315,69);
+        }
+        ctx.restore();
+        ctx.restore(); // overall scale
+    }
+
+    CanvasRenderingContext2D.prototype.roundRect = function(x,y,w,h,r){
+        if(w<2*r) r=w/2; if(h<2*r) r=h/2;
+        this.moveTo(x+r,y); this.lineTo(x+w-r,y); this.quadraticCurveTo(x+w,y,x+w,y+r);
+        this.lineTo(x+w,y+h-r); this.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+        this.lineTo(x+r,y+h); this.quadraticCurveTo(x,y+h,x,y+h-r);
+        this.lineTo(x,y+r); this.quadraticCurveTo(x,y,x+r,y); this.closePath(); return this;
+    };
+
+    // UI interaction
+    const sailTrack=document.getElementById('sailTrack'), sailKnob=document.getElementById('sailKnob'), sailLabel=document.getElementById('sailLabel');
+    const rudderTrack=document.getElementById('rudderTrack'), rudderKnob=document.getElementById('rudderKnob'), rudderLabel=document.getElementById('rudderLabel');
+    const cbTrack=document.getElementById('cbTrack'), cbKnob=document.getElementById('cbKnob'), cbLabel=document.getElementById('cbLabel');
+
+    function updateSailUI(){
+        const pct=boat.sailOffset*100;
+        sailKnob.style.top=(1-boat.sailOffset)*100+'%';
+        sailLabel.textContent='Sail '+Math.round(pct)+'%';
+    }
+    function setSailFromEvent(clientY){
+        const rect=sailTrack.getBoundingClientRect();
+        let val=1 - (clientY - rect.top)/rect.height;
+        boat.sailOffset=Math.max(0,Math.min(1,val));
+        updateSailUI();
+    }
+    sailTrack.addEventListener('touchstart',e=>{e.preventDefault(); if(e.targetTouches[0]) setSailFromEvent(e.targetTouches[0].clientY);}, {passive:false});
+    sailTrack.addEventListener('touchmove',e=>{e.preventDefault(); if(e.targetTouches[0]) setSailFromEvent(e.targetTouches[0].clientY);}, {passive:false});
+    sailTrack.addEventListener('mousedown',e=>setSailFromEvent(e.clientY));
+    sailTrack.addEventListener('mousemove',e=>{if(e.buttons===1) setSailFromEvent(e.clientY);});
+
+    function updateRudderUI(){
+        const pct=boat.rudder*100;
+        rudderKnob.style.left=((boat.rudder+1)/2*100)+'%';
+        rudderLabel.textContent='Rudder '+Math.round(pct)+'%';
+    }
+    function setRudderFromEvent(clientX){
+        const rect=rudderTrack.getBoundingClientRect();
+        let val=(clientX - rect.left)/rect.width*2 - 1;
+        if(Math.abs(val)<0.05) val=0;
+        boat.rudder=Math.max(-1,Math.min(1,val));
+        updateRudderUI();
+    }
+    rudderTrack.addEventListener('touchstart',e=>{e.preventDefault(); if(e.targetTouches[0]) setRudderFromEvent(e.targetTouches[0].clientX);}, {passive:false});
+    rudderTrack.addEventListener('touchmove',e=>{e.preventDefault(); if(e.targetTouches[0]) setRudderFromEvent(e.targetTouches[0].clientX);}, {passive:false});
+    rudderTrack.addEventListener('mousedown',e=>setRudderFromEvent(e.clientX));
+    rudderTrack.addEventListener('mousemove',e=>{if(e.buttons===1) setRudderFromEvent(e.clientX);});
+
+    let rudderTouched=false;
+    rudderTrack.addEventListener('touchstart',()=>rudderTouched=true,{passive:true});
+    rudderTrack.addEventListener('touchend',()=>{rudderTouched=false; setTimeout(()=>{if(!rudderTouched){boat.rudder=0; updateRudderUI();}},30);}, {passive:false});
+    let rudderMouseDown=false;
+    rudderTrack.addEventListener('mousedown',()=>rudderMouseDown=true);
+    document.addEventListener('mouseup',()=>{if(rudderMouseDown){rudderMouseDown=false; setTimeout(()=>{if(!rudderMouseDown){boat.rudder=0; updateRudderUI();}},30);}});
+
+    function updateCBUI(){
+        const pct=boat.centerboard*100;
+        cbKnob.style.top=pct+'%';
+        let status='Mid'; if(pct<33) status='Up'; else if(pct>66) status='Down';
+        cbLabel.textContent='Centerboard '+status;
+    }
+    function setCBFromEvent(clientY){
+        const rect=cbTrack.getBoundingClientRect();
+        let val=(clientY - rect.top)/rect.height;
+        boat.centerboard=Math.max(0,Math.min(1,val));
+        updateCBUI();
+    }
+    cbTrack.addEventListener('touchstart',e=>{e.preventDefault(); if(e.targetTouches[0]) setCBFromEvent(e.targetTouches[0].clientY);}, {passive:false});
+    cbTrack.addEventListener('touchmove',e=>{e.preventDefault(); if(e.targetTouches[0]) setCBFromEvent(e.targetTouches[0].clientY);}, {passive:false});
+    cbTrack.addEventListener('mousedown',e=>setCBFromEvent(e.clientY));
+    cbTrack.addEventListener('mousemove',e=>{if(e.buttons===1) setCBFromEvent(e.clientY);});
+
+    updateSailUI(); updateRudderUI(); updateCBUI();
+
+    function gameLoop(){ update(); draw(); requestAnimationFrame(gameLoop); }
+    gameLoop();
+    window.addEventListener('resize',resizeCanvas);
+})();
+</script>
+</body>
+</html>
