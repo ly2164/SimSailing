@@ -44,6 +44,34 @@ window.SimCore = (function () {
     // 1.2 s, which is nothing like a real boat.
     const TURN_BASE = 0.00175;
 
+    // Backing the sail. To come through the wind you first push the boom to
+    // windward. The loaded sail then becomes a large lateral force that pivots
+    // the hull even when the boat has almost no way on - which is the entire
+    // reason the manoeuvre works, so this term deliberately does NOT scale with
+    // speed the way helm authority does. It only bites while turning toward
+    // the wind and while still near it.
+    const BACKING_ZONE = 1.35;   // ~43 deg either side of the wind
+    const BACKING_RATE = 0.0052; // rad per frame at full helm, ~18 deg/s
+    const BACKING_DRAG = 0.45;   // fraction of speed scrubbed off while backed
+
+    // 1 while the helm is turning the boat toward the wind inside the zone.
+    function isBacking(heading, rudder) {
+        if (!rudder) return 0;
+        const twa = angleOffWind(heading);
+        if (Math.abs(twa) > BACKING_ZONE * NO_GO) return 0;
+        return -Math.sign(twa) === Math.sign(rudder) ? 1 : 0;
+    }
+
+    // Yaw in rad/frame: steady helm authority plus any backing burst.
+    function turnStep(heading, rudder, speed, board) {
+        const speedForTurn = Math.min((Math.abs(speed) + 0.05) / 0.3, 1.0);
+        const turnFactor = 0.4 + 0.6 * (1 - board);
+        const helm = rudder * TURN_BASE * turnFactor * speedForTurn;
+        const back = isBacking(heading, rudder);
+        const backing = back ? rudder * BACKING_RATE : 0;
+        return { step: helm + backing, helm, backing, back };
+    }
+
     function tableLookup(table, deg) {
         if (deg <= table[0][0]) return table[0][1];
         for (let i = 0; i < table.length - 1; i++) {
@@ -86,7 +114,7 @@ window.SimCore = (function () {
         return maxLeeway * leewayDemand(heading);
     }
 
-    // Runs the same speed easing the simulator uses, to a settled value.
+// Runs the same speed easing the simulator uses, to a settled value.
     function settleSpeed(heading, trim, frames) {
         let speed = 0;
         for (let i = 0; i < (frames || 300); i++) {
@@ -95,12 +123,29 @@ window.SimCore = (function () {
         return speed;
     }
 
-    // Everything the principles page needs for one set of helm settings.
-    function analyse(heading, trim, board, rudder) {
+    // Single-step version for live use. Chasing steady state from scratch on
+    // every redraw is both wasteful and visibly steppy; stepping a carried
+    // value is what the simulator itself does and stays smooth.
+    function easeSpeed(current, heading, trim, frames) {
+        const target = calcSpeed(heading) * WIND_SPEED * calcSailEfficiency(heading, trim);
+        let s = current;
+        const n = frames || 1;
+        for (let i = 0; i < n; i++) s += (target - s) * 0.15;
+        return s;
+    }
+
+    // Everything the explainer needs for one set of helm settings. Pass a
+    // carried speed to keep it continuous across frames; omit it and the speed
+    // is solved to steady state instead.
+    function analyse(heading, trim, board, rudder, carriedSpeed) {
         const twa = angleOffWind(heading);
         const twaDeg = twa * DEG;
         const twaAbs = Math.abs(twaDeg);
-        const speed = settleSpeed(heading, trim);
+        const back = isBacking(heading, rudder);
+        // Only solve to steady state when the caller has not carried a speed;
+        // doing both would put 300 iterations back on every live repaint.
+        const raw = (carriedSpeed === undefined) ? settleSpeed(heading, trim) : carriedSpeed;
+        const speed = raw * (1 - BACKING_DRAG * back);
 
         // The sail always sets to leeward, which is the side the wind is not.
         const sailSide = Math.sign(twa) || 1;
@@ -110,11 +155,10 @@ window.SimCore = (function () {
 
         const leeway = calcLeewayAngle(heading, board);
 
-        // Turn rate from the steering term, per 60 fps frame. Yaw authority needs
-        // water flowing past the blade, so it fades out as the boat stops.
-        const speedForTurn = Math.min((Math.abs(speed) + 0.05) / 0.3, 1.0);
-        const turnFactor = 0.4 + 0.6 * (1 - board);
-        const turnRate = rudder * TURN_BASE * turnFactor * speedForTurn * 60 * DEG;
+// Yaw authority needs water flowing past the blade, so helm fades out as the
+        // boat stops; the backing term is sail-driven and does not.
+        const t = turnStep(heading, rudder, speed, board);
+        const turnRate = t.step * 60 * DEG;
 
         // Rudder also swings the stern, which pushes the bow toward the wind.
         const rudderCrab = -speed * 0.12 * Math.sin(rudder * 1.2) * (0.5 + 0.5 * (1 - board));
@@ -142,9 +186,11 @@ window.SimCore = (function () {
             leewayDeg: leeway * DEG,
             turnRate,
 
-            driveFrac: forward,
+driveFrac: forward,
             lateralFrac: lateral,
-            lateralVsDrive: forward > 0 ? lateral / forward : 0
+            lateralVsDrive: forward > 0 ? lateral / forward : 0,
+            backing: back,
+            backingSpeedLoss: BACKING_DRAG * back
         };
     }
 
@@ -152,6 +198,7 @@ window.SimCore = (function () {
         DEG, WIND_ANGLE, WIND_SPEED, MAX_SAIL_ANGLE, NO_GO, BEAM,
         POLAR, LEEWAY_PROFILE, MAX_LEEWAY_DOWN, MAX_LEEWAY_UP,
         angleOffWind, tableLookup, calcSpeed, optimalTrim, calcSailEfficiency,
-        leewayDemand, calcLeewayAngle, settleSpeed, analyse
+        leewayDemand, calcLeewayAngle, settleSpeed, easeSpeed, analyse,
+        isBacking, turnStep, BACKING_ZONE, BACKING_RATE, BACKING_DRAG, TURN_BASE
     };
 })();

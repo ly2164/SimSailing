@@ -57,6 +57,13 @@
         font-size:10px; font-weight:bold; color:#04141c; background:var(--amber);
         border-radius:4px; padding:1px 6px;
     }
+    .card.draft { border-color:rgba(231,76,60,0.45); }
+    .card.draft:hover { border-color:rgba(231,76,60,0.8); }
+    .card.draft .ver { background:rgba(231,76,60,0.85); color:#fff; }
+    .draftbadge {
+        font-size:10px; font-weight:bold; color:#fff; background:var(--red);
+        border-radius:4px; padding:1px 6px; letter-spacing:.4px;
+    }
     .card-desc { margin-top:7px; font-size:12.5px; color:var(--dim); line-height:1.6; }
     .card-meta { margin-top:8px; font-size:10.5px; color:var(--faint); font-family:Consolas,Menlo,monospace; }
     .empty { font-size:12.5px; color:var(--faint); font-style:italic; padding:10px 2px; }
@@ -77,17 +84,27 @@
                change the numbers as you move them.</p>
         </div>
 
-        <a class="card current" href="20261017-howitworks-V0.2-mobile.html">
+        <a class="card current" href="20261017-howitworks-V0.3-mobile.html">
+            <div class="card-top">
+                <span class="ver">V0.3</span>
+                <span class="card-title">Smooth &amp; Unobstructed</span>
+                <span class="badge">Current</span>
+            </div>
+            <div class="card-desc">Two fixes. Boat speed is now carried frame to frame and eased toward its
+                target, like the simulator does, instead of re-solving 300 iterations on every redraw &mdash;
+                moving a control no longer makes the diagram jump. And the readouts are plain text: result at
+                the top, control data down the left, no panel behind them, so nothing covers the rudder.</div>
+            <div class="card-meta">2026-10-17 &middot; 20261017-howitworks-V0.3-mobile.html</div>
+        </a>
+
+        <a class="card" href="20261017-howitworks-V0.2-mobile.html">
             <div class="card-top">
                 <span class="ver">V0.2</span>
                 <span class="card-title">Mobile Explainer</span>
-                <span class="badge">Current</span>
             </div>
             <div class="card-desc">Rebuilt for a phone held upright: full-screen top-down view, the three
-                controls along the bottom in the same size and style as the simulator, and a translucent
-                readout panel down the right edge. The written explanations became popups that appear when
-                the situation actually arises &mdash; sail into the no-go zone, mistrim the sail, raise the
-                board and start slipping.</div>
+                controls along the bottom in the same size and style as the simulator, and the written
+                explanations turned into popups that appear when the situation arises.</div>
             <div class="card-meta">2026-10-17 &middot; 20261017-howitworks-V0.2-mobile.html</div>
         </a>
 
@@ -110,6 +127,19 @@
             <p>The sailing simulator, version by version. Sail it, or open an older build to see how the
                physics and the handling changed.</p>
         </div>
+
+        <a class="card draft" href="20261017-demo-V1.2-backing-draft.html">
+            <div class="card-top">
+                <span class="ver">V1.2</span>
+                <span class="card-title">Backing the Sail</span>
+                <span class="draftbadge">Draft</span>
+            </div>
+            <div class="card-desc">Adds the transient you need to come through the wind: back the sail and the
+                loaded rig pivots the hull even with no way on, so a tack that used to stall in the no-go zone
+                now completes &mdash; 5.8&nbsp;s from 45&deg; off the wind, against a real 4&ndash;8&nbsp;s.
+                <strong>Not a release.</strong> The helm gesture is not settled and the turn is not yet predictable.</div>
+            <div class="card-meta">2026-10-17 &middot; 20261017-demo-V1.2-backing-draft.html</div>
+        </a>
 
         <a class="card current" href="20261017-demo-V1.1-turnrate.html">
             <div class="card-top">
