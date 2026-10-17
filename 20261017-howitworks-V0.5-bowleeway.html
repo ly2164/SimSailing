@@ -173,11 +173,12 @@
         width:22px; height:22px; padding:0; border:0; border-radius:50%;
         background:rgba(255,255,255,0.16); color:var(--ink);
         font-size:14px; line-height:22px; text-align:center; cursor:pointer;
-        pointer-events:auto;
+        pointer-events:none;
     }
     #popBtn:active { background:var(--green); color:#04141c; }
-    #pop.show { opacity:1; transform:translateX(0); }
     #scrim { opacity:0; transform:translateX(14px); transition:opacity .18s ease, transform .18s ease; }
+    #scrim.show { opacity:1; transform:translateX(0); }
+    #scrim.show #popBtn { pointer-events:auto; }
 </style>
 </head>
 <body>
