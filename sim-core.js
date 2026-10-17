@@ -38,11 +38,12 @@ window.SimCore = (function () {
     const MAX_LEEWAY_DOWN = 12 / DEG;    // centreboard fully down
     const MAX_LEEWAY_UP = 38 / DEG;      // centreboard fully raised
 
-    // Yaw authority per frame at full helm. Chosen so the peak rate is about
-    // 6 deg/s: a dinghy under sail answers the helm in roughly 3-6 deg/s, and
-    // 0.045 rad/frame (the old value) was spinning the bow through 90 deg in
-    // 1.2 s, which is nothing like a real boat.
-    const TURN_BASE = 0.00175;
+// Yaw authority per frame at full helm. Chosen so the peak rate is about
+    // 10 deg/s: a dinghy under sail answers the helm briskly, and the original
+    // 0.00175 (about 6 deg/s) felt like the tiller was connected to nothing.
+    // The rudder's side force below is scaled to match, because the two come
+    // from the same blade: you cannot turn harder without also crabbing more.
+    const TURN_BASE = 0.0030;
 
     // Backing the sail. To come through the wind you first push the boom to
     // windward. The loaded sail then becomes a large lateral force that pivots
@@ -163,7 +164,7 @@ window.SimCore = (function () {
         // to flip with the tack. Without that flip the rudder pushed the boat to
         // leeward on BOTH tacks, so with the bow swung toward the wind the track
         // line ran further downwind instead of swinging back toward it.
-        const rudderCrab = -sailSide * speed * speed * 0.22 * Math.sin(rudder * 1.2) * (0.5 + 0.5 * (1 - board));
+        const rudderCrab = -sailSide * speed * speed * 0.40 * Math.sin(rudder * 1.2) * (0.5 + 0.5 * (1 - board));
         const leewaySpeed = speed * 1.8 * Math.tan(leeway);
         const lateral = leewaySpeed + rudderCrab;
         const forward = speed * 1.8;

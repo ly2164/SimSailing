@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>How It Works V0.8 &middot; Longer Arrows, Live Notes</title>
+<style>
+    :root {
+        --sea:#0a2a3a; --panel:#0d3b4c; --line:rgba(255,255,255,0.10);
+        --ink:#e8f4f8; --dim:rgba(232,244,248,0.58); --faint:rgba(232,244,248,0.32);
+        --cyan:#6bcfff; --amber:#ffb347; --green:#2ecc71; --red:#e74c3c;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-touch-callout:none; }
+    html,body { height:100%; }
+    body {
+        background:var(--sea); color:var(--ink); overflow:hidden;
+        font-family:'Segoe UI',Roboto,sans-serif;
+        display:flex; justify-content:center; align-items:center;
+        height:100vh; touch-action:pan-y;
+    }
+
+    /* Same frame as the simulator: portrait, capped, rounded, full-bleed diagram. */
+    #stage {
+        position:relative; width:100vw; height:100vh;
+        max-width:450px; max-height:820px;
+        background:var(--panel); border-radius:12px;
+        box-shadow:0 0 40px rgba(0,0,0,0.7); overflow:hidden;
+        touch-action:none;
+    }
+    @media (min-width:460px) and (min-height:840px) { #stage { border-radius:14px; } }
+
+    canvas { display:block; width:100%; height:100%; background:var(--panel); touch-action:none; }
+
+    /* ---- controls, identical geometry and styling to the simulator ---- */
+    .circle-control {
+        position:absolute; top:80%; transform:translateY(-50%);
+        width:150px; height:150px; border-radius:50%;
+        background:rgba(0,0,0,0.2); backdrop-filter:blur(4px);
+        border:1px solid rgba(255,255,255,0.1);
+        display:flex; align-items:center; justify-content:center; flex-direction:column;
+        touch-action:none; pointer-events:auto;
+    }
+    .circle-control .track { background:rgba(255,255,255,0.2); border-radius:2px; position:relative; touch-action:none; }
+    .circle-control .knob {
+        position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+        width:28px; height:28px; border-radius:50%;
+        box-shadow:0 0 12px rgba(0,0,0,0.3);
+        pointer-events:none; transition:top .05s, left .05s;
+    }
+    .circle-control .label {
+        position:absolute; top:calc(100% + 6px); left:50%; transform:translateX(-50%);
+        font-size:12px; font-weight:bold; text-shadow:0 1px 4px rgba(0,0,0,0.5);
+        white-space:nowrap;
+    }
+    #sailControl { left:8%; }
+    #sailControl .track { width:4px; height:80%; }
+    #sailControl .knob { background:var(--cyan); box-shadow:0 0 12px rgba(107,207,255,0.4); }
+    #sailControl .label { color:var(--cyan); }
+
+    #centerboardControl {
+        position:absolute; top:80%; left:50%; transform:translate(-50%,-50%);
+        width:40px; height:150px; border-radius:20px;
+        background:rgba(0,0,0,0.2); backdrop-filter:blur(4px);
+        border:1px solid rgba(255,255,255,0.1);
+        display:flex; align-items:center; justify-content:center; flex-direction:column;
+        touch-action:none; pointer-events:auto;
+    }
+    #centerboardControl .track { width:4px; height:80%; background:rgba(255,255,255,0.2); border-radius:2px; position:relative; touch-action:none; }
+    #centerboardControl .knob {
+        position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+        width:24px; height:24px; background:var(--green); border-radius:50%;
+        box-shadow:0 0 12px rgba(46,204,113,0.5);
+        pointer-events:none; transition:top .05s;
+    }
+    #centerboardControl .label {
+        position:absolute; top:calc(100% + 6px); left:50%; transform:translateX(-50%);
+        font-size:12px; font-weight:bold; color:var(--green);
+        text-shadow:0 1px 4px rgba(0,0,0,0.5); white-space:nowrap;
+    }
+    #rudderControl { right:8%; }
+    #rudderControl .track { height:4px; width:80%; }
+    #rudderControl .knob { background:var(--amber); box-shadow:0 0 12px rgba(255,179,71,0.4); }
+    #rudderControl .label { color:var(--amber); }
+    @media (max-width:400px) {
+        .circle-control { width:120px; height:120px; }
+        .circle-control .knob { width:24px; height:24px; }
+        #centerboardControl { width:34px; height:120px; }
+        #centerboardControl .knob { width:20px; height:20px; }
+    }
+    @media (max-width:360px) {
+        .circle-control { width:100px; height:100px; }
+        .circle-control .knob { width:20px; height:20px; }
+        #centerboardControl { width:28px; height:100px; }
+        #centerboardControl .knob { width:16px; height:16px; }
+    }
+
+    /* ---- result strip across the top ---- */
+    #result {
+        position:absolute; top:0; left:0; right:0; padding:8px 12px 6px;
+        pointer-events:none;
+    }
+    #result .t { display:flex; align-items:center; gap:8px; }
+    #result h1 { font-size:15px; letter-spacing:.4px; color:var(--green); }
+    #result .vb {
+        font-family:Consolas,Menlo,monospace; font-size:10px; font-weight:bold;
+        color:#04141c; background:var(--green); border-radius:4px; padding:1px 6px;
+    }
+    #result .go { pointer-events:auto; margin-left:auto; font-size:10.5px; color:var(--dim); text-decoration:none; }
+    #result .go:hover { color:var(--cyan); }
+    #result .big {
+        display:flex; gap:14px; margin-top:5px; font-family:Consolas,Menlo,monospace;
+        font-size:12px; font-weight:bold;
+    }
+    #result .big span { color:var(--faint); font-weight:normal; font-family:inherit; font-size:10.5px; }
+    #result .big b { color:var(--ink); }
+    #result .big b.good { color:var(--cyan); }
+    #result .big b.bad { color:var(--red); }
+
+    /* ---- control data, plain text down the left, no panel behind it ---- */
+    /* Kept narrow on purpose: every pixel here comes out of the diagram. */
+    #data {
+        position:absolute; left:10px; top:86px; width:108px;
+        pointer-events:none; text-shadow:0 1px 3px rgba(0,0,0,0.85);
+    }
+    @media (max-width:380px) { #data { width:98px; } }
+    #data h2 {
+        font-size:9px; letter-spacing:1.1px; text-transform:uppercase;
+        color:var(--faint); margin:0 0 4px;
+    }
+    .grp { margin-top:9px; }
+    .grp h3 { font-size:9.5px; font-weight:bold; letter-spacing:.4px; margin-bottom:3px; }
+    .grp.sail h3 { color:var(--cyan); }
+    .grp.rudder h3 { color:var(--amber); }
+    .grp.board h3 { color:var(--green); }
+    /* space-between used to fling the key and the value to opposite ends of the
+       panel, leaving a gap 80px wide. They sit shoulder to shoulder instead. */
+    .row { display:flex; justify-content:flex-start; align-items:baseline; gap:5px; font-size:10.5px; padding:1px 0; }
+    .row .k { color:var(--dim); }
+    .row .v { font-family:Consolas,Menlo,monospace; font-weight:bold; white-space:nowrap; }
+    .good { color:var(--cyan); } .warn { color:var(--amber); } .bad { color:var(--red); }
+    #polar { display:block; width:100px; height:auto; margin-top:6px; }
+    @media (max-width:380px) { #polar { width:88px; } }
+    .pcap { font-size:8.5px; color:var(--faint); margin-top:3px; line-height:1.4; }
+    #hint { font-size:10px; color:var(--dim); margin-top:6px; line-height:1.45; }
+
+    /* ---- in-irons strip, plain text, top centre under the result ---- */
+    #warn {
+        position:absolute; left:0; right:0; top:74px; text-align:center; pointer-events:none;
+    }
+    #warn span {
+        display:none; color:#ff9b8f; font-size:11px; font-weight:bold;
+        text-shadow:0 1px 4px rgba(0,0,0,0.9);
+    }
+    #warn span.show { display:inline-block; }
+
+    /* ---- notes: stacked from the top-right corner ---- */
+    #notes {
+        position:absolute; top:74px; right:8px;
+        display:flex; flex-direction:column; align-items:flex-end; gap:6px;
+        max-height:calc(100% - 250px); overflow:hidden;
+        pointer-events:none; z-index:6;
+    }
+    .note {
+        position:relative; width:150px;
+        border-left:3px solid var(--green);
+        padding:8px 8px 7px 9px;
+        background:rgba(6,22,31,0.86);
+        border-radius:0 9px 9px 0;
+        box-shadow:0 5px 16px rgba(0,0,0,0.5);
+        pointer-events:none;
+    }
+    .note.wide { width:238px; }
+    @media (max-width:380px) { .note { width:136px; } .note.wide { width:210px; } }
+    .note h3 { font-size:11px; margin-bottom:4px; color:var(--green); line-height:1.3; }
+    .note p { font-size:10px; line-height:1.5; color:var(--dim); }
+    .note code { font-family:Consolas,Menlo,monospace; color:var(--ink); font-size:10px; }
+    .note-x {
+        position:absolute; top:4px; right:5px;
+        width:20px; height:20px; padding:0; border:0; border-radius:50%;
+        background:rgba(255,255,255,0.16); color:var(--ink);
+        font-size:13px; line-height:20px; text-align:center; cursor:pointer;
+        pointer-events:auto;
+    }
+    .note-x:active { background:var(--green); color:#04141c; }
+    .note-more {
+        display:block; width:100%; margin-top:5px; padding:2px 0 0;
+        border:0; border-top:1px solid rgba(255,255,255,0.14);
+        background:none; color:var(--green); font-size:9px; letter-spacing:.06em;
+        text-transform:uppercase; cursor:pointer; pointer-events:auto;
+    }
+    .note-more .chev { display:inline-block; transition:transform .2s ease; }
+    .note.wide .note-more .chev { transform:rotate(180deg); }
+    .note-more:active { color:var(--ink); }
+</style>
+</head>
+<body>
+<div id="stage">
+    <canvas id="plan"></canvas>
+
+    <div id="result">
+        <div class="t">
+            <h1>How It Works</h1><span class="vb">V0.8</span>
+            <a class="go" href="index.html">&larr; hub</a>
+        </div>
+        <div class="big">
+            <div><span>speed</span> <b id="r_kn">0.0 kn</b></div>
+            <div><span>up</span> <b id="r_vmgup">0.0</b></div>
+            <div><span>down</span> <b id="r_vmgdn">0.0</b></div>
+        </div>
+    </div>
+
+    <div id="warn"><span id="warnText">In irons</span></div>
+
+    <div id="sailControl" class="circle-control">
+        <div class="track" id="sailTrack"><div class="knob" id="sailKnob" style="top:50%;"></div></div>
+        <div class="label" id="sailLabel">Sail 50%</div>
+    </div>
+
+    <div id="centerboardControl">
+        <div class="track" id="cbTrack"><div class="knob" id="cbKnob" style="top:50%;"></div></div>
+        <div class="label" id="cbLabel">Board Mid</div>
+    </div>
+
+    <div id="rudderControl" class="circle-control">
+        <div class="track" id="rudderTrack"><div class="knob" id="rudderKnob" style="left:50%;"></div></div>
+        <div class="label" id="rudderLabel">Rudder 0&deg;</div>
+    </div>
+
+    <div id="data">
+        <h2>Point of sail</h2>
+        <div class="row"><span class="k">Wind from</span><span class="v">north</span></div>
+        <div class="row"><span class="k">Off wind</span><span class="v" id="r_twa">45&deg;</span></div>
+        <div class="row"><span class="k">Tack</span><span class="v" id="r_tack">stbd</span></div>
+
+        <div class="grp sail">
+            <h3>Sail &rarr; drive</h3>
+            <div class="row"><span class="k">Angle</span><span class="v" id="r_sailang">0&deg;</span></div>
+            <div class="row"><span class="k">Best</span><span class="v" id="r_ideal">0&deg;</span></div>
+            <div class="row"><span class="k">Trim</span><span class="v" id="r_trimerr">0</span></div>
+            <div class="row"><span class="k">Eff.</span><span class="v" id="r_eff">100%</span></div>
+        </div>
+
+        <div class="grp rudder">
+            <h3>Rudder &rarr; turn</h3>
+            <div class="row"><span class="k">Angle</span><span class="v" id="r_rudder">0&deg;</span></div>
+            <div class="row"><span class="k">Rate</span><span class="v" id="r_turn">0.0&deg;/s</span></div>
+            <div class="row"><span class="k">Crab</span><span class="v" id="r_crab">0.0&deg;</span></div>
+        </div>
+
+        <div class="grp board">
+            <h3>Board &rarr; leeway</h3>
+            <div class="row"><span class="k">Set</span><span class="v" id="r_board">Mid</span></div>
+            <div class="row"><span class="k">Leeway</span><span class="v" id="r_leeway">0&deg;</span></div>
+            <div class="row"><span class="k">Sideways</span><span class="v" id="r_lat">0%</span></div>
+        </div>
+
+        <canvas id="polar" width="264" height="150"></canvas>
+        <p class="pcap">speed polar &middot; dot = your heading</p>
+        <p class="hint" id="hint">Drag the diagram to aim the bow.</p>
+    </div>
+
+<div id="notes"></div>
+    </div>
+
+<script src="sim-core.js"></script>
+<script>
+(function () {
+    'use strict';
+    const C = window.SimCore;
+    const DEG = C.DEG;
+
+    // Start close-hauled, sail trimmed for that angle, board mostly down.
+    const START_TWA = 50 / DEG;
+    const START_TRIM = C.optimalTrim(START_TWA);
+    // Speed is carried frame to frame and eased toward its target, exactly the
+    // way the simulator does it. Solving it afresh on every redraw meant 300
+    // iterations per touchmove, which showed up as visible stutter.
+    const helm = { heading: START_TWA, trim: START_TRIM, board: 0.85, rudder: 0, speed: 0 };
+
+    const stage = document.getElementById('stage');
+    const plan = document.getElementById('plan');
+    const pctx = plan.getContext('2d');
+    const polar = document.getElementById('polar');
+    const gctx = polar.getContext('2d');
+    const $ = id => document.getElementById(id);
+
+    const el = {
+        sailTrack: $('sailTrack'), sailKnob: $('sailKnob'), sailLabel: $('sailLabel'),
+        rudderTrack: $('rudderTrack'), rudderKnob: $('rudderKnob'), rudderLabel: $('rudderLabel'),
+        cbTrack: $('cbTrack'), cbKnob: $('cbKnob'), cbLabel: $('cbLabel')
+    };
+
+    function updateSailUI() {
+        el.sailKnob.style.top = (1 - helm.trim) * 100 + '%';
+        el.sailLabel.textContent = 'Sail ' + Math.round(helm.trim * 100) + '%';
+    }
+    function updateRudderUI() {
+        el.rudderKnob.style.left = ((helm.rudder + 1) / 2 * 100) + '%';
+        el.rudderLabel.innerHTML = 'Rudder ' + Math.round(helm.rudder * 100) + '&deg;';
+    }
+    function updateCBUI() {
+        el.cbKnob.style.top = helm.board * 100 + '%';
+        const p = helm.board * 100;
+        el.cbLabel.textContent = 'Board ' + (p < 33 ? 'Up' : p > 66 ? 'Down' : 'Mid');
+    }
+
+    // ---- control tolerance, same rules as the simulator ----
+    const GRAB_RADIUS = 50;
+    const controls = [
+        { el: el.sailTrack, axis: 'y', selfCentre: false, apply: y => {
+            const r = el.sailTrack.getBoundingClientRect();
+            helm.trim = Math.max(0, Math.min(1, 1 - (y - r.top) / r.height));
+        } },
+        { el: el.cbTrack, axis: 'y', selfCentre: false, apply: y => {
+            const r = el.cbTrack.getBoundingClientRect();
+            helm.board = Math.max(0, Math.min(1, (y - r.top) / r.height));
+        } },
+        { el: el.rudderTrack, axis: 'x', selfCentre: true, apply: x => {
+            const r = el.rudderTrack.getBoundingClientRect();
+            let v = (x - r.left) / r.width * 2 - 1;
+            if (Math.abs(v) < 0.05) v = 0;
+            helm.rudder = Math.max(-1, Math.min(1, v));
+        } }
+    ];
+
+    function trackMissDistance(c, px, py) {
+        const r = c.el.getBoundingClientRect();
+        if (c.axis === 'y') {
+            const cx = r.left + r.width / 2;
+            const cy = Math.min(Math.max(py, r.top), r.top + r.height);
+            return Math.hypot(px - cx, py - cy);
+        }
+        const cy = r.top + r.height / 2;
+        const cx = Math.min(Math.max(px, r.left), r.left + r.width);
+        return Math.hypot(px - cx, py - cy);
+    }
+    function controlNear(px, py) {
+        let best = null, bestD = GRAB_RADIUS;
+        for (const c of controls) { const d = trackMissDistance(c, px, py); if (d < bestD) { bestD = d; best = c; } }
+        return best;
+    }
+
+    let active = null, activeTouchId = null, rudderHeld = false;
+    function releaseRudder() {
+        rudderHeld = false;
+        setTimeout(() => { if (!rudderHeld) { helm.rudder = 0; ensureSteering(); sync(); } }, 30);
+    }
+    function grab(c, px, py) {
+        active = c;
+        if (c.selfCentre) rudderHeld = true;
+        c.apply(c.axis === 'y' ? py : px);
+        ensureSteering();
+        sync();
+    }
+    function drop() { const c = active; active = null; activeTouchId = null; if (c && c.selfCentre) releaseRudder(); }
+    function findTouch(list, id) { if (!list) return null; for (const t of list) if (t.identifier === id) return t; return null; }
+
+    stage.addEventListener('touchstart', e => {
+        const t = e.targetTouches[0]; if (!t) return;
+        const c = controlNear(t.clientX, t.clientY);
+        if (!c) return;
+        e.preventDefault();
+        activeTouchId = t.identifier;
+        grab(c, t.clientX, t.clientY);
+    }, { passive: false });
+    document.addEventListener('touchmove', e => {
+        if (!active || activeTouchId === null) return;
+        const t = findTouch(e.changedTouches, activeTouchId); if (!t) return;
+        e.preventDefault();
+        active.apply(active.axis === 'y' ? t.clientY : t.clientX);
+        ensureSteering();
+        sync();
+    }, { passive: false });
+    document.addEventListener('touchend', e => {
+        if (activeTouchId === null || !findTouch(e.changedTouches, activeTouchId)) return;
+        drop();
+    }, { passive: false });
+    document.addEventListener('touchcancel', e => {
+        if (activeTouchId === null || !findTouch(e.changedTouches, activeTouchId)) return;
+        drop();
+    }, { passive: false });
+
+    stage.addEventListener('mousedown', e => {
+        const c = controlNear(e.clientX, e.clientY);
+        if (!c) return;
+        e.preventDefault();
+        grab(c, e.clientX, e.clientY);
+    });
+    document.addEventListener('mousemove', e => {
+        if (!active || activeTouchId !== null || !(e.buttons & 1)) return;
+        active.apply(active.axis === 'y' ? e.clientY : e.clientX);
+        ensureSteering();
+        sync();
+    });
+    document.addEventListener('mouseup', () => { if (activeTouchId === null) drop(); });
+    window.addEventListener('blur', drop);
+
+    // ---- the helm actually steers -------------------------------------------
+    // The turn rate used to be computed and displayed but never applied: holding
+    // the rudder left the heading frozen, so the green track arrow could only
+    // wobble by the degree or two of crab and the helm looked broken. Integrating
+    // the same turnStep the simulator uses makes the rudder do what a rudder does.
+    const FRAME_MS = 1000 / 60;
+    let steerAcc = 0, steerLast = 0, steerRaf = 0;
+
+    function stepHelm(dtMs) {
+        steerAcc += Math.min(dtMs, 250);
+        let guard = 0;
+        while (steerAcc >= FRAME_MS && guard++ < 12) {
+            steerAcc -= FRAME_MS;
+            helm.heading += C.turnStep(helm.heading, helm.rudder, helm.speed, helm.board).step;
+        }
+    }
+    function steerLoop(ts) {
+        steerRaf = 0;
+        if (!steerLast) steerLast = ts;
+        stepHelm(ts - steerLast);
+        steerLast = ts;
+        sync();
+        const target = C.calcSpeed(helm.heading) * C.WIND_SPEED * C.calcSailEfficiency(helm.heading, helm.trim);
+        const busy = Math.abs(helm.rudder) > 0.001 || Math.abs(helm.speed - target) > 0.002;
+        if (busy) steerRaf = requestAnimationFrame(steerLoop);
+        else steerLast = 0;
+    }
+    function ensureSteering() {
+        if (!steerRaf) { steerLast = 0; steerRaf = requestAnimationFrame(steerLoop); }
+    }
+
+    // ---- aim the bow by dragging the diagram ----
+    let aiming = false, aimTouchId = null;
+    function aimFrom(px, py) {
+        const r = plan.getBoundingClientRect();
+        // Aim from the pivot itself, which now sits at the centre of the band
+        // rather than the centre of the canvas.
+        const band = diagramBand(1);
+        const dx = px - (r.left + (band[0] + band[1]) / 2);
+        const dy = py - (r.top + r.height * 0.42);
+        if (Math.hypot(dx, dy) < 14) return;
+        helm.heading = Math.atan2(dx, -dy);
+        ensureSteering();
+        sync();
+    }
+    plan.addEventListener('touchstart', e => {
+        const t = e.targetTouches[0]; if (!t) return;
+        e.preventDefault();
+        aiming = true; aimTouchId = t.identifier;
+        aimFrom(t.clientX, t.clientY);
+    }, { passive: false });
+    plan.addEventListener('touchmove', e => {
+        if (!aiming) return;
+        const t = findTouch(e.changedTouches, aimTouchId); if (!t) return;
+        e.preventDefault();
+        aimFrom(t.clientX, t.clientY);
+    }, { passive: false });
+    const endAim = e => {
+        if (aimTouchId !== null && e.changedTouches && !findTouch(e.changedTouches, aimTouchId)) return;
+        aiming = false; aimTouchId = null;
+    };
+    plan.addEventListener('touchend', endAim);
+    plan.addEventListener('touchcancel', endAim);
+
+    plan.addEventListener('mousedown', e => { e.preventDefault(); aiming = true; aimFrom(e.clientX, e.clientY); });
+    document.addEventListener('mousemove', e => { if (aiming) aimFrom(e.clientX, e.clientY); });
+    document.addEventListener('mouseup', () => { aiming = false; });
+
+    // ---- conditional popups: the long notes, shown when they apply ----
+    const NOTES = {
+        irons: {
+            title: 'You are in irons',
+            body: 'Inside <code>32&deg;</code> of the wind the sail cannot push the hull forward at all &mdash; ' +
+                  'that shaded wedge on the diagram is the <strong>no-go zone</strong>. Speed has dropped to zero and the ' +
+                  'rudder has almost nothing to work with, because a blade needs water flowing past it. ' +
+                  'To get out you must <em>back the sail</em> and fall off, then fill in on the new side. ' +
+                  'A boat makes progress upwind by <em>tacking</em> across at about 45&deg;, never by pointing straight at the wind.'
+        },
+        trim: {
+            title: 'Sail trimmed wrong',
+            body: 'The best sail angle changes with the point of sail: sheeted hard in when close-hauled, eased right ' +
+                  'out when running. The <code>Trim</code> figure in the panel shows how far off that ideal you are, and ' +
+                  '<code>Eff.</code> is what it costs &mdash; the boat simply goes slower.'
+        },
+        leeway: {
+            title: 'Sliding sideways',
+            body: 'Sideways force makes the hull slip off to leeward. With the board raised the leeway angle runs into the ' +
+                  'tens of degrees, so much of your speed is spent going across the wind rather than where the bow points. ' +
+                  'Lower the board and the hull grips: leeway falls to a few degrees and you keep your direction.'
+        },
+        helm: {
+            title: 'Steering needs speed',
+            body: 'The rudder deflects water, and that water has to be moving. Yaw authority fades away as the boat slows, ' +
+                  'which is why turn rate collapses in the no-go zone and when you are stopped altogether. ' +
+                  'On a real boat you would also have to push the boom across to break the stall before the rudder bites.'
+        }
+    };
+
+    // Popups fire on the rising edge of each condition, so a note re-arms once the
+    // situation has cleared. Several can be true at once, so rather than queueing
+    // them one behind another they all appear, stacked down from the top-right,
+    // and each fades on its own.
+    const noteState = {};
+    const live = [];
+    const MAX_NOTES = 3;
+    const notesEl = $('notes');
+
+    // Only the opening sentence is shown; the rest sits behind the chevron.
+    // Cutting at the first full stop outside any tag keeps the HTML balanced,
+    // so entities and <code>/<strong> spans are never sliced in half.
+    function firstSentence(html) {
+        let depth = 0;
+        for (let i = 0; i < html.length; i++) {
+            const ch = html[i];
+            if (ch === '<') depth++;
+            else if (ch === '>') depth--;
+            else if (ch === '.' && depth === 0) return html.slice(0, i + 1);
+        }
+        return html;
+    }
+
+    function dismissNote(key) {
+        const i = live.indexOf(key);
+        if (i >= 0) live.splice(i, 1);
+        const el = notesEl.querySelector('.note[data-key="' + key + '"]');
+        if (el) el.remove();
+    }
+    function dismissAll() { while (live.length) dismissNote(live[0]); }
+
+    function buildNote(key) {
+        const full = NOTES[key].body;
+        const lead = firstSentence(full);
+        const el = document.createElement('div');
+        el.className = 'note';
+        el.setAttribute('data-key', key);
+        el.innerHTML = '<button class="note-x" aria-label="Dismiss">&times;</button>' +
+            '<h3></h3><p></p>' +
+            '<button class="note-more" aria-expanded="false">' +
+            '<span class="chev">&#9662;</span> <span class="mt">More</span></button>';
+        el.querySelector('h3').textContent = NOTES[key].title;
+        const p = el.querySelector('p');
+        const more = el.querySelector('.note-more');
+        const setTxt = open => {
+            p.innerHTML = open ? full : (lead + (lead.length < full.length ? '&hellip;' : ''));
+        };
+        more.style.display = lead.length < full.length ? '' : 'none';
+        setTxt(false);
+        el.querySelector('.note-x').addEventListener('click', e => { e.stopPropagation(); dismissNote(key); });
+        more.addEventListener('click', e => {
+            e.stopPropagation();
+            const open = !el.classList.contains('wide');
+            el.classList.toggle('wide', open);
+            more.setAttribute('aria-expanded', open ? 'true' : 'false');
+            more.querySelector('.mt').textContent = open ? 'Less' : 'More';
+            setTxt(open);
+            // Reading must not be cut short; only the collapsed card self-dismisses.
+            clearTimeout(el._timer);
+            if (!open) el._timer = setTimeout(() => dismissNote(key), 7000);
+        });
+        el._timer = setTimeout(() => dismissNote(key), 7000);
+        return el;
+    }
+
+    function showNote(key) {
+        if (live.indexOf(key) >= 0) return;
+        while (live.length >= MAX_NOTES) dismissNote(live[0]);
+        notesEl.appendChild(buildNote(key));
+        live.push(key);
+    }
+
+    function maybePopup(key, cond) {
+        const on = !!cond;
+        const was = !!noteState[key];
+        noteState[key] = on;
+        if (on && !was) showNote(key);
+    }
+
+    // ---- Drawing ----------------------------------------------------------
+    // Horizontal band the diagram may use, in LOGICAL units. The readout panel
+    // covers the left of the frame, so the drawing is centred on what is left
+    // rather than on the canvas. Measured from the panel itself so it follows
+    // whatever width the CSS gives it.
+    function diagramBand(S) {
+        const W = plan.clientWidth;
+        const pr = stage.getBoundingClientRect(), dr = $('data').getBoundingClientRect();
+        const padL = Math.max(8, (dr.width ? dr.right - pr.left : 0) + 6);
+        const padR = 8;
+        const bl = Math.min(padL, W * 0.42) / S;
+        const br = (W - padR) / S;
+        return [bl, br];
+    }
+    function arrow(ctx, x0, y0, x1, y1, color, width, head) {
+        const a = Math.atan2(y1 - y0, x1 - x0);
+        const h = head || 9;
+        ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width || 2;
+        ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1 - Math.cos(a) * h * 0.6, y1 - Math.sin(a) * h * 0.6); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x1 - Math.cos(a - 0.4) * h, y1 - Math.sin(a - 0.4) * h);
+        ctx.lineTo(x1 - Math.cos(a + 0.4) * h, y1 - Math.sin(a + 0.4) * h);
+        ctx.closePath(); ctx.fill();
+    }
+// Scale for the boat, matched to the simulator's 400x700 logical space.
+    // How many pixels one knot is worth on each arrow, so a full 6 kn boat draws an
+    // arrow of about a sixth of the frame.
+    const PX_PER_KN = LH => LH * 0.15 / 6;
+
+    // How long an arrow may be so its tip stays inside the frame.
+    function clampedLength(ctx, x0, y0, dx, dy, wantLen) {
+        const reach = Math.hypot(dx, dy) || 1;
+        const ux = dx / reach, uy = dy / reach;
+        const room = Math.min(
+            ux > 0 ? (R_LIMIT - 8 - x0) : (x0 - L_LIMIT + 8),
+            uy > 0 ? (H_LIMIT - 8 - y0) : (y0 - 8),
+            Infinity);
+        return Math.max(0, Math.min(wantLen, room));
+    }
+
+    let W_LIMIT = 640, H_LIMIT = 640, L_LIMIT = 0;
+
+    // Keep a label fully inside the frame even when it sits near an edge.
+    function clampXY(x, y, halfW, halfH) {
+        return [
+            Math.max(L_LIMIT + halfW + 4, Math.min(R_LIMIT - halfW - 4, x)),
+            Math.max(halfH + 4, Math.min(LH_ - halfH - 4, y))
+        ];
+    }
+    let LW_ = 640, LH_ = 640, R_LIMIT = 640;
+
+    function label(ctx, x, y, text, color) {
+        ctx.font = 'bold 11px Consolas,Menlo,monospace';
+        const w = ctx.measureText ? ctx.measureText(text).width : text.length * 6;
+        const p = clampXY(x, y, w / 2, 7);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(6,22,31,0.9)';
+        ctx.strokeText(text, p[0], p[1]);
+        ctx.fillStyle = color;
+        ctx.fillText(text, p[0], p[1]);
+    }
+
+    function drawPlan(a, S, W, H) {
+        // The caller passes CSS pixels, but the transform normalises the drawing
+        // to a fixed logical height, so everything below works in LOGICAL units.
+        // Mixing the two made every H-sized element about 17 percent too big and
+        // pushed the wind arrows off the bottom of the frame.
+        const LW = W / S, LH = H / S;
+        LW_ = LW; LH_ = LH;
+        // The readouts are pinned to the left of the frame, so the diagram is
+        // laid out in the band to their right. Centring on the raw frame left the
+        // boat and the wind inside the panel's shadow, which is what made the
+        // whole scene read as sitting to the left.
+        const band = diagramBand(S);
+        const bl = band[0], br = band[1];
+        L_LIMIT = bl; R_LIMIT = br; W_LIMIT = br; H_LIMIT = LH;
+        const cx = (bl + br) / 2, cy = LH * 0.42;
+        const half = (br - bl) / 2;
+        const K = LH / 700;
+        const PX = PX_PER_KN(LH) * 1.75;
+        pctx.setTransform(1, 0, 0, 1, 0, 0);
+        pctx.clearRect(0, 0, plan.width, plan.height);
+        pctx.setTransform(S, 0, 0, S, 0, 0);
+
+        // ---- background: no-go wedge and wind ----
+        pctx.save();
+        pctx.beginPath();
+        pctx.moveTo(cx, cy);
+        pctx.arc(cx, cy, Math.min(LH * 0.5, half * 1.15), -Math.PI / 2 - C.NO_GO, -Math.PI / 2 + C.NO_GO);
+        pctx.closePath();
+        pctx.fillStyle = a.inIrons ? 'rgba(231,76,60,0.24)' : 'rgba(231,76,60,0.10)';
+        pctx.fill();
+        pctx.restore();
+
+        // Wind. Each column bows very slightly, alternating side, so the stream
+        // reads as moving air instead of five ruled lines. The head is placed on
+        // the curve's tangent at its lower end, so it leans with the bow.
+        pctx.strokeStyle = 'rgba(200,230,255,0.30)';
+        pctx.lineWidth = 2;
+        pctx.fillStyle = 'rgba(200,230,255,0.30)';
+        const wTop = 8, wBot = LH - 8, wMid = (wTop + wBot) / 2;
+        // Spread the columns evenly across the band instead of a fixed 62px step
+        // around the old centre, which left them bunched on the left.
+        const step = Math.min(62, (half - 14) / 2);
+        for (let i = -2; i <= 2; i++) {
+            const x = cx + i * step;
+            const bow = (i % 2 ? 1 : -1) * (10 + Math.abs(i) * 3);
+            pctx.beginPath();
+            pctx.moveTo(x, wTop);
+            pctx.quadraticCurveTo(x + bow, wMid, x, wBot);
+            pctx.stroke();
+            const a = Math.atan2(wBot - wMid, -bow);
+            const ux = Math.cos(a), uy = Math.sin(a), hl = 11, hw = 5.5;
+            pctx.beginPath();
+            pctx.moveTo(x, wBot);
+            pctx.lineTo(x - ux * hl + uy * hw, wBot - uy * hl - ux * hw);
+            pctx.lineTo(x - ux * hl - uy * hw, wBot - uy * hl + ux * hw);
+            pctx.closePath(); pctx.fill();
+        }
+        // No text on the canvas here: the top-left corner belongs to the title.
+
+        // Signed slip decides which side of the bow the track bends to. Using the
+        // magnitude plus the tack could not express the case where a hard helm
+        // drives the lateral force through zero and the boat tracks to windward.
+        const lw = a.lateralDeg / DEG;
+        const hx = Math.sin(helm.heading), hy = -Math.cos(helm.heading);
+        const track = helm.heading + lw;
+        const tx = Math.sin(track), ty = -Math.cos(track);
+        // Leeward is the side the wind pushes you toward, which is
+        // sign(angle off wind) times the starboard perpendicular.
+        const sideSign = a.twaDeg >= 0 ? 1 : -1;
+        const sx = Math.cos(helm.heading) * sideSign, sy = Math.sin(helm.heading) * sideSign;
+
+        const trackKn = Math.hypot(a.driveFrac, a.lateralFrac) / 1.8 * 6;
+        const driveKn = a.driveFrac / 1.8 * 6;
+        const sideKn = a.lateralFrac / 1.8 * 6;
+
+        // ---- the boat, rotated to its heading ----
+        pctx.save();
+        pctx.translate(cx, cy);
+        pctx.rotate(helm.heading);
+
+        if (Math.abs(lw) > 0.001) {
+            pctx.save(); pctx.rotate(lw);
+            pctx.fillStyle = 'rgba(255,179,71,0.15)';
+            pctx.beginPath();
+            pctx.moveTo(0, 0); pctx.lineTo(0, -150 * K); pctx.lineTo(-Math.tan(lw) * 150 * K, -150 * K); pctx.closePath();
+            pctx.fill();
+            pctx.restore();
+        }
+
+        pctx.beginPath();
+        pctx.moveTo(0, -96 * K);
+        pctx.quadraticCurveTo(26 * K, -40 * K, 24 * K, 22 * K);
+        pctx.quadraticCurveTo(22 * K, 74 * K, 13 * K, 88 * K);
+        pctx.lineTo(-13 * K, 88 * K);
+        pctx.quadraticCurveTo(-22 * K, 74 * K, -24 * K, 22 * K);
+        pctx.quadraticCurveTo(-26 * K, -40 * K, 0, -96 * K);
+        pctx.closePath();
+        pctx.fillStyle = '#6b4c2a'; pctx.fill();
+        pctx.strokeStyle = '#3d2916'; pctx.lineWidth = 2; pctx.stroke();
+
+        const boardLen = (8 + helm.board * 44) * K;
+        pctx.save();
+        pctx.globalAlpha = helm.board < 0.06 ? 0.25 : 1;
+        pctx.beginPath();
+        pctx.moveTo(-3 * K, 40 * K); pctx.lineTo(3 * K, 40 * K);
+        pctx.lineTo(2 * K, 40 * K + boardLen); pctx.lineTo(-2 * K, 40 * K + boardLen);
+        pctx.closePath();
+        pctx.fillStyle = '#2ecc71'; pctx.fill();
+        if (helm.board < 0.06) {
+            pctx.setLineDash([4, 4]); pctx.strokeStyle = '#2ecc71'; pctx.lineWidth = 1.5; pctx.stroke(); pctx.setLineDash([]);
+        }
+        pctx.restore();
+
+        pctx.save();
+        pctx.translate(0, 88 * K);
+        pctx.rotate(-helm.rudder * 0.6);
+        pctx.fillStyle = '#ffb347';
+        pctx.fillRect(-4 * K, 0, 8 * K, 20 * K);
+        pctx.restore();
+
+        const mastY = -34 * K;
+        const sa = a.sailAngleDeg / DEG;
+        const L = 74 * K;
+        const cxSail = Math.sin(sa) * L, cySail = mastY + Math.cos(sa) * L;
+        pctx.beginPath();
+        pctx.moveTo(0, -84 * K);
+        pctx.lineTo(0, mastY);
+        pctx.lineTo(cxSail, cySail);
+        pctx.closePath();
+        pctx.fillStyle = 'rgba(255,248,235,0.55)'; pctx.fill();
+        pctx.strokeStyle = '#2c3e50'; pctx.lineWidth = 2; pctx.stroke();
+        pctx.beginPath(); pctx.arc(0, mastY, 5 * K, 0, Math.PI * 2);
+        pctx.fillStyle = '#f1c40f'; pctx.fill();
+
+        pctx.strokeStyle = 'rgba(255,179,71,0.9)';
+        pctx.lineWidth = 2;
+        pctx.beginPath();
+        pctx.arc(0, mastY, 32 * K, Math.PI / 2, Math.PI / 2 - sa, sa < 0);
+        pctx.stroke();
+        pctx.restore();
+
+        // ---- vector overlay, on top of the hull so it is never hidden ----
+        // bow line, clamped to the frame like the arrows so it never runs off an edge
+        pctx.save();
+        pctx.setLineDash([6, 5]);
+        pctx.strokeStyle = 'rgba(232,244,248,0.45)';
+        pctx.lineWidth = 2;
+        const bowLen = Math.min(LH * 0.44, Math.min(LW, LH) * 0.58);
+        pctx.beginPath(); pctx.moveTo(cx, cy); pctx.lineTo(cx + hx * bowLen, cy + hy * bowLen); pctx.stroke();
+        pctx.restore();
+
+        // actual track through the water
+        const trackLen = clampedLength(pctx, cx, cy, tx, ty, Math.min(LH * 0.46, trackKn * PX));
+        arrow(pctx, cx, cy, cx + tx * trackLen, cy + ty * trackLen, '#2ecc71', 3, 11);
+        label(pctx, cx + tx * (trackLen + 15), cy + ty * (trackLen + 15),
+            trackKn.toFixed(1) + ' kn', '#2ecc71');
+
+        // driving force along the bow, kept short so it stays in frame
+        const driveLen = clampedLength(pctx, cx, cy, hx, hy, Math.min(LH * 0.40, driveKn * PX));
+        arrow(pctx, cx, cy, cx + hx * driveLen, cy + hy * driveLen, '#6bcfff', 3, 10);
+        label(pctx, cx + hx * (driveLen + 15), cy + hy * (driveLen + 15),
+            driveKn.toFixed(1), '#6bcfff');
+
+        // sideways push to leeward
+        const sideLen = clampedLength(pctx, cx, cy, sx, sy, Math.min(LH * 0.30, sideKn * PX));
+        arrow(pctx, cx, cy, cx + sx * sideLen, cy + sy * sideLen, '#ffb347', 3, 10);
+        label(pctx, cx + sx * (sideLen + 15), cy + sy * (sideLen + 15),
+            sideKn.toFixed(1), '#ffb347');
+
+        // angle off the wind, sitting on the line the bow points along
+        const twaR = Math.min(LH * 0.30, LH * 0.34 - 34);
+        label(pctx, cx + hx * twaR, cy + hy * twaR,
+            Math.round(a.twaAbs) + '\u00B0 off wind', a.inIrons ? '#ff9b8f' : '#e8f4f8');
+
+        // Leeway angle, always drawn at the BOW between the bow line and the actual
+        // track. It has to be anchored to the heading, not to due north, or it
+        // sits in the wrong place the moment the bow is not pointing up.
+        if (Math.abs(lw) > 0.004) {
+            const lr = Math.min(LH * 0.20, half * 0.75);
+            const bowA = helm.heading - Math.PI / 2;
+            pctx.strokeStyle = 'rgba(255,179,71,0.95)';
+            pctx.lineWidth = 2;
+            pctx.beginPath();
+            pctx.arc(cx, cy, lr, bowA, bowA + lw, lw < 0);
+            pctx.stroke();
+            const mid = bowA + lw / 2;
+            // Keep the label on the arc it belongs to. Sliding it sideways to fit
+            // the band tore it away from the wedge, so pull it in along its own
+            // ray instead and shrink the wedge with it.
+            const txt = 'leeway ' + a.leewayDeg.toFixed(0) + '\u00B0';
+            const hw = 30;
+            const lo = Math.max(L_LIMIT + hw, cx), hi = Math.min(R_LIMIT - hw, cx);
+            let R = lr + 18;
+            let lx = cx + Math.cos(mid) * R;
+            for (let g = 0; g < 14 && (lx < lo || lx > hi); g++) {
+                R *= 0.88;
+                lx = cx + Math.cos(mid) * R;
+            }
+            label(pctx, lx, cy + Math.sin(mid) * R, txt, '#ffb347');
+        }
+    }
+    function drawPolar(a, w) {
+        const S = w / 300;
+        gctx.setTransform(1, 0, 0, 1, 0, 0);
+        gctx.clearRect(0, 0, polar.width, polar.height);
+        gctx.setTransform(S, 0, 0, S, 0, 0);
+
+        const cx = 150, base = 152, R = 116;
+        const xAt = d => cx - Math.cos(d / DEG) * R;
+
+        gctx.fillStyle = 'rgba(231,76,60,0.25)';
+        gctx.fillRect(cx - R * Math.cos(C.NO_GO), base - R, 2 * R * Math.cos(C.NO_GO), R);
+
+        gctx.strokeStyle = '#6bcfff'; gctx.lineWidth = 2;
+        gctx.beginPath();
+        for (let d = 0; d <= 180; d += 2) {
+            const v = C.calcSpeed(d / DEG) * R;
+            d === 0 ? gctx.moveTo(xAt(d), base - v) : gctx.lineTo(xAt(d), base - v);
+        }
+        for (let d = 180; d >= 0; d -= 2) {
+            gctx.lineTo(cx + Math.cos(d / DEG) * R, base - C.calcSpeed(d / DEG) * R);
+        }
+        gctx.stroke();
+
+        gctx.strokeStyle = 'rgba(255,255,255,0.18)'; gctx.lineWidth = 1;
+        gctx.beginPath(); gctx.moveTo(cx - R, base); gctx.lineTo(cx + R, base); gctx.stroke();
+
+        const v = C.calcSpeed(helm.heading) * R;
+        gctx.beginPath();
+        gctx.arc(cx + Math.sin(helm.heading) * R, base - v, 5, 0, Math.PI * 2);
+        gctx.fillStyle = '#ffb347'; gctx.fill();
+        gctx.strokeStyle = '#0a2a3a'; gctx.lineWidth = 2; gctx.stroke();
+
+        gctx.fillStyle = 'rgba(232,244,248,0.42)';
+        gctx.font = '10px sans-serif';
+        gctx.textAlign = 'center';
+        gctx.fillText('upwind', cx, base + 13);
+        void a;
+    }
+
+    // ---- readouts ----
+    function grade(v, good, ok) { return v <= good ? 'good' : (v <= ok ? 'warn' : 'bad'); }
+
+    function sync() {
+        // One easing step per repaint keeps the speed continuous and cheap.
+        helm.speed = C.easeSpeed(helm.speed, helm.heading, helm.trim, 1);
+        const a = C.analyse(helm.heading, helm.trim, helm.board, helm.rudder, helm.speed);
+        updateSailUI(); updateRudderUI(); updateCBUI();
+
+        $('r_twa').textContent = Math.round(a.twaAbs) + '\u00B0';
+        $('r_twa').className = 'v ' + (a.inIrons ? 'bad' : '');
+        $('r_tack').textContent = a.tack === 'port' ? 'port' : 'stbd';
+
+        $('r_sailang').textContent = Math.round(Math.abs(a.sailAngleDeg)) + '\u00B0';
+        $('r_ideal').textContent = Math.round(a.idealSailAngleDeg) + '\u00B0';
+        const err = Math.round(a.trimError);
+        $('r_trimerr').textContent = err === 0 ? 'ok' : (err > 0 ? '+' : '') + err;
+        $('r_trimerr').className = 'v ' + (Math.abs(err) <= 5 ? 'good' : Math.abs(err) <= 20 ? 'warn' : 'bad');
+        $('r_eff').textContent = Math.round(a.efficiency * 100) + '%';
+        $('r_eff').className = 'v ' + grade(100 - a.efficiency * 100, 5, 25);
+
+        $('r_rudder').textContent = Math.round(helm.rudder * 40) + '\u00B0';
+        $('r_crab').textContent = a.crabDeg.toFixed(1) + '\u00B0';
+        $('r_crab').className = 'v ' + (a.crabDeg < 1 ? '' : a.crabDeg < 4 ? 'warn' : 'bad');
+        $('r_turn').textContent = Math.abs(a.turnRate).toFixed(1) + '\u00B0/s';
+        $('r_turn').className = 'v ' + (Math.abs(a.turnRate) < 0.8 ? 'bad' : Math.abs(a.turnRate) < 3 ? 'warn' : 'good');
+
+        const bp = helm.board * 100;
+        $('r_board').textContent = bp < 33 ? 'up' : bp > 66 ? 'down' : 'mid';
+        $('r_leeway').textContent = a.leewayDeg.toFixed(0) + '\u00B0';
+        $('r_leeway').className = 'v ' + grade(a.leewayDeg, 12, 28);
+        const lat = Math.round(a.lateralVsDrive * 100);
+        $('r_lat').textContent = lat + '%';
+        $('r_lat').className = 'v ' + grade(lat, 15, 40);
+
+        $('r_kn').textContent = a.kn.toFixed(1) + ' kn';
+        $('r_kn').className = 'v ' + (a.kn < 0.6 ? 'bad' : 'good');
+        $('r_vmgup').textContent = a.vmgUpwindKn > 0.01 ? a.vmgUpwindKn.toFixed(1) : '\u2013';
+        $('r_vmgup').className = 'v ' + (a.vmgUpwindKn <= 0.01 ? 'bad' : 'good');
+        $('r_vmgdn').textContent = a.vmgDownwindKn > 0.01 ? a.vmgDownwindKn.toFixed(1) : '\u2013';
+        $('r_vmgdn').className = 'v ' + (a.vmgDownwindKn <= 0.01 ? 'bad' : 'good');
+
+        $('warnText').classList.toggle('show', a.inIrons);
+
+        const dpr = window.devicePixelRatio || 1;
+        const W = plan.clientWidth, H = plan.clientHeight;
+        const S = dpr * (H / 700);
+        drawPlan(a, S, W, H);
+        drawPolar(a, polar.clientWidth);
+
+        // Popups are checked last so an open one can never freeze the diagram.
+        maybePopup('irons', a.inIrons);
+        maybePopup('trim', !a.inIrons && Math.abs(a.trimError) > 22);
+        maybePopup('leeway', a.leewayDeg > 30);
+        maybePopup('helm', !a.inIrons && a.kn < 0.8 && Math.abs(helm.rudder) > 0.3);
+    }
+
+    function layout() {
+        const dpr = window.devicePixelRatio || 1;
+        const W = plan.clientWidth, H = plan.clientHeight;
+        plan.width = Math.round(W * dpr);
+        plan.height = Math.round(H * dpr);
+        const pw = polar.clientWidth;
+        polar.width = Math.round(pw * dpr);
+        polar.height = Math.round(pw * (170 / 300) * dpr);
+    }
+
+    layout();
+    window.addEventListener('resize', () => { layout(); for (const k in noteState) noteState[k] = false; dismissAll(); sync(); });
+    sync();
+})();
+</script>
+</body>
+</html>
