@@ -158,7 +158,12 @@ window.SimCore = (function () {
         // Rudder side force. A rudder works by deflecting water, so its force
         // scales with the dynamic pressure, roughly v squared, not with v.
         // Modelling it as linear with v left it almost invisible at speed.
-        const rudderCrab = -speed * speed * 0.22 * Math.sin(rudder * 1.2) * (0.5 + 0.5 * (1 - board));
+        // Swinging the helm to starboard shoves the hull to PORT. "To port" is
+        // to leeward on one tack and to windward on the other, so the term has
+        // to flip with the tack. Without that flip the rudder pushed the boat to
+        // leeward on BOTH tacks, so with the bow swung toward the wind the track
+        // line ran further downwind instead of swinging back toward it.
+        const rudderCrab = -sailSide * speed * speed * 0.22 * Math.sin(rudder * 1.2) * (0.5 + 0.5 * (1 - board));
         const leewaySpeed = speed * 1.8 * Math.tan(leeway);
         const lateral = leewaySpeed + rudderCrab;
         const forward = speed * 1.8;
@@ -176,7 +181,10 @@ const t = turnStep(heading, rudder, speed, board);
         return {
             heading,
             twaDeg, twaAbs,
-            tack: twaDeg >= 0 ? 'starboard' : 'port',
+            // Which side the wind is coming OVER decides the tack: bow to the
+            // right of the wind source means the wind is over the port side.
+            // (Sailors name the tack for the windward side, not the leeward one.)
+            tack: twaDeg >= 0 ? 'port' : 'starboard',
             inIrons: twaAbs <= NO_GO * DEG,
 
             speed, kn: speed * 6,
