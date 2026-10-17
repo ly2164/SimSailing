@@ -106,11 +106,21 @@
         V0.1&ndash;V0.4 keep their original Chinese interface; V0.5 onward are English.
     </div>
 
-    <a class="card current" href="20261017-demo-V0.8-leeway-model.html">
+    <a class="card current" href="20261017-demo-V0.9-rudder-release.html">
+        <div class="card-top">
+            <span class="ver">V0.9</span>
+            <span class="card-title">Rudder Release Fix</span>
+            <span class="badge">Current</span>
+            <span class="tag">EN</span>
+        </div>
+        <div class="card-desc">Makes rudder self-centering reliable. It previously only listened for <code>touchend</code> and a document <code>mouseup</code>, so the rudder stayed hard over whenever the drag ended any other way: a cancelled touch (incoming call, notification, browser reclaiming the gesture), the page losing focus, or the tab being hidden. Adds <code>touchcancel</code>, <code>blur</code> and <code>visibilitychange</code> to one shared release path, and holds off resetting while a second finger is still down. Verified 11 of 12 release scenarios; a mouse released entirely outside the browser window delivers no event to the page and cannot be detected.</div>
+        <div class="card-meta">2026-10-17 &middot; 20261017-demo-V0.9-rudder-release.html</div>
+    </a>
+
+    <a class="card old" href="20261017-demo-V0.8-leeway-model.html">
         <div class="card-top">
             <span class="ver">V0.8</span>
             <span class="card-title">Bounded Leeway Model</span>
-            <span class="badge">Current</span>
             <span class="tag">EN</span>
         </div>
         <div class="card-desc">Replaces the unbounded drift accumulator with a capped leeway angle. The old model amplified sideways speed about 32&times;, reaching 72.8&deg; of leeway at beam reach &mdash; the hull would slide almost bodily sideways. Real hulls settle in a band because sideways resistance grows with slip. Leeway is now 38&deg; max with the centreboard raised and 12&deg; with it down, worst just above the no-go edge and falling to zero dead downwind. With the board up the boat now crabs upwind at 45&deg; instead of drifting south, which is what a boardless hull actually does.</div>
