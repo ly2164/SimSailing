@@ -106,11 +106,21 @@
         V0.1&ndash;V0.4 keep their original Chinese interface; V0.5 onward are English.
     </div>
 
-    <a class="card current" href="20261017-demo-V0.7-leeway.html">
+    <a class="card current" href="20261017-demo-V0.8-leeway-model.html">
+        <div class="card-top">
+            <span class="ver">V0.8</span>
+            <span class="card-title">Bounded Leeway Model</span>
+            <span class="badge">Current</span>
+            <span class="tag">EN</span>
+        </div>
+        <div class="card-desc">Replaces the unbounded drift accumulator with a capped leeway angle. The old model amplified sideways speed about 32&times;, reaching 72.8&deg; of leeway at beam reach &mdash; the hull would slide almost bodily sideways. Real hulls settle in a band because sideways resistance grows with slip. Leeway is now 38&deg; max with the centreboard raised and 12&deg; with it down, worst just above the no-go edge and falling to zero dead downwind. With the board up the boat now crabs upwind at 45&deg; instead of drifting south, which is what a boardless hull actually does.</div>
+        <div class="card-meta">2026-10-17 &middot; 20261017-demo-V0.8-leeway-model.html</div>
+    </a>
+
+    <a class="card old" href="20261017-demo-V0.7-leeway.html">
         <div class="card-top">
             <span class="ver">V0.7</span>
             <span class="card-title">Leeway Direction Fix</span>
-            <span class="badge">Current</span>
             <span class="tag">EN</span>
         </div>
         <div class="card-desc">Fixes an inverted leeway sign that pushed the boat <em>into</em> the wind. The drift term was being subtracted from y while x added it, so the boat slid upwind at every heading &mdash; point it east under a north wind and it crawled north instead of sliding south. Regression introduced during the V0.3 minification and present through V0.6; V0.1&ndash;V0.2 were correct. Verified 0 of 296 headings with upwind leeway.</div>
