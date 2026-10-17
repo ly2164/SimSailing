@@ -75,10 +75,14 @@
             #centerboardControl { width:28px; height:100px; }
             #centerboardControl .knob { width:16px; height:16px; }
         }
-    </style>`r`n    #draftTag{position:absolute;top:6px;left:50%;transform:translateX(-50%);z-index:9;`r`n        background:rgba(255,179,71,.92);color:#04141c;font:bold 10px sans-serif;`r`n        padding:3px 10px;border-radius:5px;white-space:nowrap;pointer-events:none;}`r`n
-</head>
+    #draftTag{position:absolute;top:6px;left:50%;transform:translateX(-50%);z-index:9;
+        background:rgba(255,179,71,.92);color:#04141c;font:bold 10px sans-serif;
+        padding:3px 10px;border-radius:5px;white-space:nowrap;pointer-events:none;}
+</style>
+  </head>
 <body>
-<div id="draftTag">DRAFT v1.2 &middot; backing the sail is experimental</div>`r`n<div id="gameWrapper">
+<div id="draftTag">DRAFT v1.2 &middot; backing the sail is experimental</div>
+<div id="gameWrapper">
     <canvas id="gameCanvas"></canvas>
     <div id="sailControl" class="circle-control">
         <div class="track" id="sailTrack"><div class="knob" id="sailKnob" style="top:50%;"></div></div>
