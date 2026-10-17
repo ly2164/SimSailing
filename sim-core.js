@@ -200,10 +200,11 @@ const t = turnStep(heading, rudder, speed, board);
             idealSailAngleDeg: want * MAX_SAIL_ANGLE * DEG,
 
 leewayDeg: totalLeeway * DEG,
-            // Signed slip: which side of the bow the boat is actually tracking to.
-            // totalLeeway is a magnitude, so it cannot express the case where a
-            // hard helm drives the lateral force through zero and the track bends
-            // to WINDWARD of the bow. Drawers must use this, not the magnitude.
+            // Signed slip, measured along the LEEWARD-positive axis (not to starboard).
+            // The lateral axis points to starboard on one tack and to port on the
+            // other, so a renderer must NOT add this straight to the heading: on
+            // the port tack that aims the track to windward. Build the track from
+            // driveFrac and lateralFrac against the leeward direction instead.
             lateralDeg: forward > 0 ? Math.atan2(lateral, forward) * DEG : 0,
             hullLeewayDeg: leeway * DEG,
             crabDeg: Math.abs(totalLeeway * DEG - leeway * DEG),
